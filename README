@@ -25,27 +25,31 @@ $ vim preprocess_illumina.pl
 Programs used:
 
 Trimmomatic
-http://www.usadellab.org/cms/uploads/supplementary/Trimmomatic/Trimmomatic-0.22.zip
-Lohse M, Bolger AM, Nagel A, Fernie AR, Lunn JE, Stitt M, Usadel B. RobiNA: a
-user-friendly, integrated software solution for RNA-Seq-based transcriptomics.
-Nucleic Acids Res. 2012 Jul;40(Web Server issue):W622-7.
+ http://www.usadellab.org/cms/index.php?page=trimmomatic
+ Lohse M, Bolger AM, Nagel A, Fernie AR, Lunn JE, Stitt M, Usadel B. RobiNA: a user-friendly, integrated software solution for RNA-Seq-based transcriptomics. Nucleic Acids Res. 2012 Jul;40(Web Server issue):W622-7.
 
 pbzip2
-Jeff Gilchrist
-http://compression.ca
-Debian/Ubuntu:
-apt-get install pbzip2
+ Jeff Gilchrist
+ http://compression.ca
+ Debian/Ubuntu:
+ apt-get install pbzip2
 
 samtools
-Heng Li
-http://samtools.sourceforge.net
-Debian/Ubuntu:
-apt-get install samtools
+ Heng Li
+ http://samtools.sourceforge.net
+ Debian/Ubuntu:
+ apt-get install samtools
 
 fastqc
-simon.andrews@babraham.ac.uk
-http://www.bioinformatics.bbsrc.ac.uk
+ simon.andrews@babraham.ac.uk
+ http://www.bioinformatics.bbsrc.ac.uk
 
 fastx_toolkit
-gordon at cshl dot edu
-http://hannonlab.cshl.edu/fastx_toolkit/download.html
+ gordon at cshl dot edu
+ http://hannonlab.cshl.edu/fastx_toolkit/download.html
+ apt-get install fastx_toolkit
+
+bowtie2
+ Ben Langmead (blangmea@jhsph.edu)
+ http://bowtie-bio.sourceforge.net/bowtie2/index.shtml
+ apt-get install bowtie2
