@@ -13,7 +13,7 @@ foreach my $f (sort @files){
 	# change this to grab the pair's filename by substituting something 
 	$pair=~s/_1_sequence/_2_sequence/;
 	# change the cmd to something you like
-	my $cmd = "preprocess_illumina.pl -cdna -trimmomatic ~/software/Trimmomatic/*jar -paired $f $pair";
+	my $cmd = "preprocess_illumina.pl -cdna -paired $f $pair";
 	system($cmd);
 	sleep(1);
 }
