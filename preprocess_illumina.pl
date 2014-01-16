@@ -23,7 +23,7 @@
     noconvert_fastq => Don't convert to Sanger FASTQ flavour if Illumina 1.3 format is detected
     dofasta         => Create FASTA file
 
-    genome_size :s  => Give genome size to estimate coverage (can use mb or gb as suffix for megabases or gigabases)
+    genome_size  :s => Give genome size to estimate coverage (can use mb or gb as suffix for megabases or gigabases)
     kmer_ram:i      => To create Fastb and produce a 25-mer histogram, then tell me how many GB of RAM to use (0 switches it off)
     threads:i       => Threads for building kmer table using allpaths (def 4). Meryl will only use 1 thread. 
                       NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files but 
@@ -35,21 +35,22 @@
     no_preprocess   => Do not do any trimming    
     
     no_screen       => Do not screen for contaminants using bowtie2
-    rDNA :s         => rDNA bowtie2 database
-    contam :s       => contaminants bowtie2 database
-    human :s        => human genome bowtie2 database (unless you're sequencing humans!)
+    rDNA        :s  => rDNA bowtie2 database
+    contam      :s  => contaminants bowtie2 database
+    human       :s  => human genome bowtie2 database (unless you're sequencing humans!)
     nohuman         => Don't search the human genome
     adapters        => Illumina adapters FASTA if also -trimmomatic (default provided)
     noadaptor       => Do not search for adaptors
     trimmomatic     => Trimmomatic jar file
     user_bowtie :s  => A bowtie2 database array for optional custom screening
-    user_label :s   => This label will be used for custom screening
+    user_label  :s  => This label will be used for custom screening
     
     paired          => If 2 files have been provided, then treat them as a pair.
-    trim_5 :i       => Trim these many bases from the 5' (def 0)
-    qtrim :i        => Trim 3' so that mean quality is that much in the phred scale (def. 5)
+    trim_5      :i  => Trim these many bases from the 5' (def 0)
+    qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
     backup          => If bz2 files provided, then re-compress them using parallel-bzip2 (e.g. if source is Baylor)
+    max_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
 
 
 Alexie tip: For RNA-Seq, I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
@@ -75,6 +76,7 @@ use Getopt::Long;
 use Pod::Usage;
 use BSD::Resource;
 use FindBin qw/$RealBin/;
+$ENV{PATH} .= ":$RealBin:$RealBin/3rd_party/FastQC/";
 
 my ( $pbzip_exec, $fastqc_exec ) = &check_program( 'pbzip2', 'fastqc' );
 
@@ -90,6 +92,7 @@ chomp($cwd);
 my $kmer_ram = int(0);
 my $cpus = 4;
 my $qtrim    = 5;
+my $max_length = 32;
 
 # edit these if you use it often with the same variables
 my $trimmomatic_exec = $RealBin . "/3rd_party/trimmomatic-0.30.jar";
@@ -128,7 +131,8 @@ GetOptions(
             'qtrim:i'            => \$qtrim,
             'backup'             => \$backup_bz2,
             'trimmomatic:s'      => \$trimmomatic_exec,
-	    'noadaptors'         => \$noadaptors
+	    'noadaptors'         => \$noadaptors,
+	    'max_length:i'       => \$max_length
 );
 my @files = @ARGV;
 
@@ -241,12 +245,12 @@ if ( $is_paired && $trimmomatic_exec ) {
 "java -classpath $trimmomatic_exec org.usadellab.trimmomatic.TrimmomaticPE  -threads $cpus -phred33 "
    . " $file1 $file2 "
    . " $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired "
-   . " MINLEN:36 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
+   . " MINLEN:32 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
    :
 "java -classpath $trimmomatic_exec org.usadellab.trimmomatic.TrimmomaticPE  -threads $cpus -phred33 "
    . " $file1 $file2 "
    . " $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired SLIDINGWINDOW:8:10 "
-   . " MINLEN:36 LEADING:4 TRAILING:$qtrim "
+   . " MINLEN:32 LEADING:4 TRAILING:$qtrim "
  ;
 
  $cmd .= " HEADCROP=$trim_5 " if $trim_5;
@@ -255,7 +259,7 @@ if ( $is_paired && $trimmomatic_exec ) {
   $cmd =~ s/phred33/phred64/;
   $cmd .= " TOPHRED33 ";
  }
- $cmd .= " MINLEN:36 2>&1";
+ $cmd .= " MINLEN:$max_length 2>&1";
  &process_cmd($cmd) unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
  $files_to_delete_master{$file1} = 1;
  $files_to_delete_master{$file1.'.unpaired'} = 1;
@@ -275,11 +279,11 @@ if ( $is_paired && $trimmomatic_exec ) {
   $cmd = $adapters_db ? 
    "java -classpath $trimmomatic_exec org.usadellab.trimmomatic.TrimmomaticSE  -threads $cpus -phred33 "
    . " $file $file.trimmomatic "
-   . " MINLEN:36 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
+   . " MINLEN:32 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
    :
    "java -classpath $trimmomatic_exec org.usadellab.trimmomatic.TrimmomaticSE  -threads $cpus -phred33 "
    . " $file $file.trimmomatic "
-   . " MINLEN:36 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
+   . " MINLEN:32 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
    ;
 
    $cmd .= " HEADCROP=$trim_5 " if $trim_5;
@@ -287,7 +291,7 @@ if ( $is_paired && $trimmomatic_exec ) {
     $cmd =~ s/phred33/phred64/;
     $cmd .= " TOPHRED33 ";
    }
-   $cmd .= " MINLEN:36 2>&1";
+   $cmd .= " MINLEN:$max_length 2>&1";
    &process_cmd($cmd) unless -s "$file.trimmomatic";
    $files_to_delete_master{$file} = 1;
    $files_to_delete_master{$file.'.unpaired'} = 1;
@@ -314,7 +318,7 @@ foreach my $thread (@threads) {
  $thread->join();
 }
 
-&process_cmd( "$pbzip_exec -fvp$cpus ".join(" ",keys %files_to_delete_master)  );
+&process_cmd( "$pbzip_exec -fvp$cpus ". join(" ",(keys %files_to_delete_master) )  . " 2>/dev/null") if %files_to_delete_master && scalar(keys %files_to_delete_master)>0;
 
 ##################################################################################################
 sub screen_bowtie2() {
