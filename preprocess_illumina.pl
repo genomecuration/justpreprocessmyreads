@@ -42,11 +42,12 @@
     adapters        => Illumina adapters FASTA if also -trimmomatic (default provided)
     noadaptor       => Do not search for adaptors
     trimmomatic     => Trimmomatic jar file
-    user_bowtie :s  => A bowtie2 database array for optional custom screening
-    user_label  :s  => This label will be used for custom screening
+    user_bowtie :s  => 1+ bowtie2 database array for optional custom screening. Must match -user_label
+    user_label  :s  => 1+ this label will be used for custom screening. Must match -user_bowtie
     
     paired          => If 2 files have been provided, then treat them as a pair.
     trim_5      :i  => Trim these many bases from the 5' (def 0)
+    trim_3      :i  => Trim these many bases from the 3' (def 0)
     qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
     backup          => If bz2 files provided, then re-compress them using parallel-bzip2 (e.g. if source is Baylor)
@@ -81,22 +82,23 @@ $ENV{PATH} .= ":$RealBin:$RealBin/3rd_party/FastQC/";
 my ( $pbzip_exec, $fastqc_exec ) = &check_program( 'pbzip2', 'fastqc' );
 
 my (
-     $is_sanger,   $do_fasta,     $genome_size, $use_meryl,
-     $is_illumina, $delete_fastb, $is_cdna,     $no_preprocess,
-     $casava,      $user_label,   $user_bowtie, $noconvert_fastq,
-     $is_paired,   $trim_5,       $stop_qc,     $no_screen,
-     $backup_bz2,  $debug,        $is_gdna,     $nohuman, $noadaptors
+     $is_sanger,   $do_fasta,     $genome_size,  $use_meryl,
+     $is_illumina, $delete_fastb, $is_cdna,      $no_preprocess,
+     $casava,      @user_labels,  @user_bowties, $noconvert_fastq,
+     $is_paired,   $trim_5,       $stop_qc,      $no_screen,
+     $backup_bz2,  $debug,        $is_gdna,      $nohuman,
+     $noadaptors, $trim_3
 );
 my $cwd = `pwd`;
 chomp($cwd);
-my $kmer_ram = int(0);
-my $cpus = 4;
-my $qtrim    = 5;
+my $kmer_ram   = int(0);
+my $cpus       = 4;
+my $qtrim      = 5;
 my $max_length = 32;
 
 # edit these if you use it often with the same variables
-my $trimmomatic_exec = $RealBin . "/3rd_party/trimmomatic-0.30.jar";
-my $rDNA_db   = $RealBin . '/dbs/' . 'rDNA_nt_inv.fsa_nr';              #bowtie2
+my $trimmomatic_exec = $RealBin . "/3rd_party/trimmomatic-0.32.jar";
+my $rDNA_db          = $RealBin . '/dbs/' . 'rDNA_nt_inv.fsa_nr';      #bowtie2
 my $contam_db = $RealBin . '/dbs/' . 'ecoli_pseudomonas.fsa.masked.nr'; #bowtie2
 my $human_db  = $RealBin . '/dbs/' . 'human_genome.fasta';              #bowtie2
 my $phix_db   = $RealBin . '/dbs/' . 'phage_phiX174';                   #bowtie2
@@ -114,7 +116,7 @@ GetOptions(
             'dofasta'            => \$do_fasta,
             'genome_size:s'      => \$genome_size,
             'kmer_ram:i'         => \$kmer_ram,
-            'cpu|threads:i'          => \$cpus,
+            'cpu|threads:i'      => \$cpus,
             'meryl'              => \$use_meryl,
             'illumina'           => \$is_illumina,
             'delete_fastb'       => \$delete_fastb,
@@ -122,17 +124,18 @@ GetOptions(
             'gdna'               => \$is_gdna,
             'no_preprocess'      => \$no_preprocess,
             'casava18'           => \$casava,
-            'user_bowtie:s'      => \$user_bowtie,
-            'user_label:s'       => \$user_label,
-            'noconvert_fastq'      => \$noconvert_fastq,
+            'user_bowtie:s{,}'   => \@user_bowties,
+            'user_label:s{,}'    => \@user_labels,
+            'noconvert_fastq'    => \$noconvert_fastq,
             'paired'             => \$is_paired,
             'trim_5:i'           => \$trim_5,
+            'trim_3:i'           => \$trim_3,
             'stop_qc'            => \$stop_qc,
             'qtrim:i'            => \$qtrim,
             'backup'             => \$backup_bz2,
             'trimmomatic:s'      => \$trimmomatic_exec,
-	    'noadaptors'         => \$noadaptors,
-	    'max_length:i'       => \$max_length
+            'noadaptors'         => \$noadaptors,
+            'max_length:i'       => \$max_length
 );
 my @files = @ARGV;
 
@@ -147,8 +150,13 @@ if ( !$is_paired && scalar(@files) == 2 ) {
  sleep(3);
 }
 
-pod2usage "Must specify a label if also using a custom bowtie file\n"
-  if $user_bowtie && !$user_label;
+for ( my $i = 0 ; $i < scalar(@user_bowties) ; $i++ ) {
+ my $user_bowtie = $user_bowties[$i];
+ die "It doesn't seem that $user_bowtie is formatted for Bowtie2\n" unless -s $user_bowtie.'.1.bt2';
+ my $user_label  = $user_labels[$i];
+ pod2usage "Must specify a label if also using a custom bowtie file\n"
+   if $user_bowtie && !$user_label;
+}
 pod2usage "No files given\n" unless @files;
 
 undef($adapters_db) if $noadaptors;
@@ -184,9 +192,9 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
  else {
   if ( $file =~ /.bz2$/ && $backup_bz2 ) {
    print "Uncompressing $file\n";
-    &process_cmd("$pbzip_exec -dp4 $file")
+   &process_cmd("$pbzip_exec -dp4 $file")
      ; # baylor files are compressed with single threaded bzip2 so make a $pbzip_exec backup
-  $file =~ s/.bz2$//;
+   $file =~ s/.bz2$//;
   }
   elsif ( $file =~ /.bz2$/ ) {
    print "Uncompressing $file\n";
@@ -198,7 +206,7 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
    $file =~ s/.gz$//;
    &process_cmd("gunzip  $file.gz ");
   }
-  $files_to_delete_master{$file} = 1; 
+  $files_to_delete_master{$file} = 1;
 
   $files[$i] = $file;
   if ( !$casava && !$is_sanger && !$is_illumina ) {
@@ -221,7 +229,7 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
   }
   $files_to_delete_master{$file} = 1;
   push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file") )
-    unless -f $file . "_fastqc.zip" || !$fastqc_exec;
+    unless -s $file . "_fastqc.zip" || !$fastqc_exec;
  }
 }
 
@@ -235,25 +243,25 @@ if ($stop_qc) {
 
 ###############################
 if ( $is_paired && $trimmomatic_exec ) {
- my $file1  = $files[0];
- my $file2  = $files[1];
+ my $file1 = $files[0];
+ my $file2 = $files[1];
  print "Pre-processing $file1 and $file2\n";
  my $check1 = &check_fastq_format($file1);
  my $check2 = &check_fastq_format($file2);
  my $cmd;
- $cmd = $adapters_db ? 
-"java -classpath $trimmomatic_exec org.usadellab.trimmomatic.TrimmomaticPE  -threads $cpus -phred33 "
+ $cmd =
+   $adapters_db
+   ? "java -jar $trimmomatic_exec PE -threads $cpus -phred33 "
    . " $file1 $file2 "
    . " $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired "
    . " MINLEN:32 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
-   :
-"java -classpath $trimmomatic_exec org.usadellab.trimmomatic.TrimmomaticPE  -threads $cpus -phred33 "
+   : "java -jar $trimmomatic_exec PE -threads $cpus -phred33 "
    . " $file1 $file2 "
    . " $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired SLIDINGWINDOW:8:10 "
-   . " MINLEN:32 LEADING:4 TRAILING:$qtrim "
- ;
+   . " MINLEN:32 LEADING:4 TRAILING:$qtrim ";
 
- $cmd .= " HEADCROP=$trim_5 " if $trim_5;
+ $cmd .= " HEADCROP:$trim_5 " if $trim_5;
+ $cmd .= " CROP:$trim_3 " if $trim_3;
 
  if ( $check1 eq $check2 && ( $check1 eq 'illumina' ) ) {
   $cmd =~ s/phred33/phred64/;
@@ -261,42 +269,55 @@ if ( $is_paired && $trimmomatic_exec ) {
  }
  $cmd .= " MINLEN:$max_length 2>&1";
  &process_cmd($cmd) unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
- $files_to_delete_master{$file1} = 1;
- $files_to_delete_master{$file1.'.unpaired'} = 1;
- $files_to_delete_master{$file2} = 1;
- $files_to_delete_master{$file2.'.unpaired'} = 1;
+ $files_to_delete_master{$file1}                 = 1;
+ $files_to_delete_master{ $file1 . '.unpaired' } = 1;
+ $files_to_delete_master{$file2}                 = 1;
+ $files_to_delete_master{ $file2 . '.unpaired' } = 1;
 
  $files[0] .= '.trimmomatic';
  $files[1] .= '.trimmomatic';
- push(@threads,&create_fork("$fastqc_exec --noextract --nogroup -q $file1.trimmomatic ") ) unless -f "$file1.trimmomatic_fastqc.zip" || !$fastqc_exec;
- push(@threads,&create_fork("$fastqc_exec --noextract --nogroup -q $file2.trimmomatic ") ) unless -f "$file2.trimmomatic_fastqc.zip" || !$fastqc_exec;
-}else{
+ push(
+       @threads,
+       &create_fork(
+                    "$fastqc_exec --noextract --nogroup -q $file1.trimmomatic ")
+ ) unless -f "$file1.trimmomatic_fastqc.zip" || !$fastqc_exec;
+ push(
+       @threads,
+       &create_fork(
+                    "$fastqc_exec --noextract --nogroup -q $file2.trimmomatic ")
+ ) unless -f "$file2.trimmomatic_fastqc.zip" || !$fastqc_exec;
+}
+else {
  for ( my $i = 0 ; $i < @files ; $i++ ) {
   my $file = $files[$i];
   print "Pre-processing $file\n";
   my $check = &check_fastq_format($file);
   my $cmd;
-  $cmd = $adapters_db ? 
-   "java -classpath $trimmomatic_exec org.usadellab.trimmomatic.TrimmomaticSE  -threads $cpus -phred33 "
-   . " $file $file.trimmomatic "
-   . " MINLEN:32 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
-   :
-   "java -classpath $trimmomatic_exec org.usadellab.trimmomatic.TrimmomaticSE  -threads $cpus -phred33 "
-   . " $file $file.trimmomatic "
-   . " MINLEN:32 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
-   ;
+  $cmd =
+    $adapters_db
+    ? "java -jar $trimmomatic_exec SE -threads $cpus -phred33 "
+    . " $file $file.trimmomatic "
+    . " MINLEN:32 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
+    : "java -jar $trimmomatic_exec SE -threads $cpus -phred33 "
+    . " $file $file.trimmomatic "
+    . " MINLEN:32 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 ";
 
-   $cmd .= " HEADCROP=$trim_5 " if $trim_5;
-   if ( $check && $check eq 'illumina' ) {
-    $cmd =~ s/phred33/phred64/;
-    $cmd .= " TOPHRED33 ";
-   }
-   $cmd .= " MINLEN:$max_length 2>&1";
-   &process_cmd($cmd) unless -s "$file.trimmomatic";
-   $files_to_delete_master{$file} = 1;
-   $files_to_delete_master{$file.'.unpaired'} = 1;
-   $files[$i] .= '.trimmomatic';
-   push(@threads,&create_fork("$fastqc_exec --noextract --nogroup -q $file.trimmomatic ") ) unless -f "$file.trimmomatic_fastqc.zip" || !$fastqc_exec;
+  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
+  $cmd .= " CROP:$trim_3 " if $trim_3;
+  if ( $check && $check eq 'illumina' ) {
+   $cmd =~ s/phred33/phred64/;
+   $cmd .= " TOPHRED33 ";
+  }
+  $cmd .= " MINLEN:$max_length 2>&1";
+  &process_cmd($cmd) unless -s "$file.trimmomatic";
+  $files_to_delete_master{$file} = 1;
+  $files_to_delete_master{ $file . '.unpaired' } = 1;
+  $files[$i] .= '.trimmomatic';
+  push(
+        @threads,
+        &create_fork(
+                     "$fastqc_exec --noextract --nogroup -q $file.trimmomatic ")
+  ) unless -f "$file.trimmomatic_fastqc.zip" || !$fastqc_exec;
  }
 }
 
@@ -304,21 +325,23 @@ print "Stage 1 completed\n";
 ##########################
 
 for ( my $i = 0 ; $i < @files ; $i++ ) {
- my $file             = $files[$i];
+ my $file = $files[$i];
  print "Post-processing $file\n";
- &fastq_to_fasta ("$file") if $do_fasta;
+ &fastq_to_fasta("$file")  if $do_fasta;
  &do_genome_kmers("$file") if $kmer_ram > 0;
  &screen_bowtie2( $files[$i] ) unless $no_screen || !-s $files[$i];
  $files_to_delete_master{$file} = 1;
 }
-
 
 print "Completed. Compressing/cleaning up...\n";
 foreach my $thread (@threads) {
  $thread->join();
 }
 
-&process_cmd( "$pbzip_exec -fvp$cpus ". join(" ",(keys %files_to_delete_master) )  . " 2>/dev/null") if %files_to_delete_master && scalar(keys %files_to_delete_master)>0;
+&process_cmd(   "$pbzip_exec -fvp$cpus "
+              . join( " ", ( keys %files_to_delete_master ) )
+              . " 2>/dev/null" )
+  if %files_to_delete_master && scalar( keys %files_to_delete_master ) > 0;
 
 ##################################################################################################
 sub screen_bowtie2() {
@@ -384,23 +407,26 @@ sub screen_bowtie2() {
   sleep(3);
  }
 
- if ( $user_bowtie && -s $user_bowtie ) {
-  print "\tUser specified bowtie file $user_bowtie (labelled $user_label)\n";
-  if ( !-s $file . "_vs_$user_label.bam" ) {
+ for ( my $i = 0 ; $i < scalar(@user_bowties) ; $i++ ) {
+  my $user_bowtie = $user_bowties[$i];
+  my $user_label  = $user_labels[$i];
+  if ( $user_bowtie && -s $user_bowtie.'.1.bt2') {
+   print "\tUser specified bowtie file $user_bowtie (labelled $user_label)\n";
+   if ( !-s $file . "_vs_$user_label.bam" ) {
 
 #   &process_cmd(   "kanga -T $cpus -i $file -I $user_bowtie -r2 -R300 -M5 -F "  . $file . "_vs_$user_label.log -o " . $file . "_vs_$user_label.sam" );
-   &process_cmd(
+    &process_cmd(
 "$bowtie2_exec --threads $cpus --fast --no-unal -x $user_bowtie -U $file 2> $file"
-      . "_vs_$user_label.log | $samtools_exec view -S -F4 -b -o  $file"
-      . "_vs_$user_label.bam - > /dev/null" )
-     unless -s $file . "_vs_$user_label.log";
-   system(   "$samtools_exec view $file"
-           . "_vs_$user_label.bam |cut -f 2|sort -n |uniq -c >> $file"
-           . "_vs_$user_label.log " );
-   sleep(3);
+       . "_vs_$user_label.log | $samtools_exec view -S -F4 -b -o  $file"
+       . "_vs_$user_label.bam - > /dev/null" )
+      unless -s $file . "_vs_$user_label.log";
+    system(   "$samtools_exec view $file"
+            . "_vs_$user_label.bam |cut -f 2|sort -n |uniq -c >> $file"
+            . "_vs_$user_label.log " );
+    sleep(3);
+   }
   }
  }
-
 }
 
 sub check_fastq_format() {
@@ -648,25 +674,26 @@ sub samtools_version_check() {
  }
 }
 
-sub fastq_to_fasta(){
- my $infile = shift || die ("No input file");
+sub fastq_to_fasta() {
+ my $infile = shift || die("No input file");
  my $output = $infile . ".fsa";
- return if (-s $output || $output.'.bz2');
+ return if ( -s $output || $output . '.bz2' );
  print "Preparing FASTA\n";
- open (IN,$infile);
- open (OUT, ">$output");
- my $count=1;
- while (my $ln=<IN>){
-        next if $ln=~/^\s*$/;
-        if ($ln=~/^@/){
-                my $seq = <IN>;
-                $ln=~s/^@/>/;
-                print OUT $ln.$seq;
-                my $discard = <IN>.<IN>;
-        }else{
-                die "Invalid line $count found:\n$ln\n";
-        }
-        $count+=4;
+ open( IN,  $infile );
+ open( OUT, ">$output" );
+ my $count = 1;
+ while ( my $ln = <IN> ) {
+  next if $ln =~ /^\s*$/;
+  if ( $ln =~ /^@/ ) {
+   my $seq = <IN>;
+   $ln =~ s/^@/>/;
+   print OUT $ln . $seq;
+   my $discard = <IN> . <IN>;
+  }
+  else {
+   die "Invalid line $count found:\n$ln\n";
+  }
+  $count += 4;
  }
  close IN;
  close OUT;
