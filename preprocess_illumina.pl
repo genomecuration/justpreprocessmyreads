@@ -14,27 +14,20 @@
 
  Requires ALLPATHS-LG or meryl for kmer-hist
 
- Needs pbzip2, Trimmomatic
+ Needs pbzip2
     
-    debug           => debug reports
-    sanger          => Force sanger Quality scores for fastq (otherwise autodetect)
-    illumina        => Force Illumina 1.3-1.7 qual scores (autodetect)
-    casava18        => Force input as Fastq from Casava 1.8 (autodetect)
-    noconvert_fastq => Don't convert to Sanger FASTQ flavour if Illumina 1.3 format is detected
-    dofasta         => Create FASTA file
+    debug           => Verbose output. Prints out commands before they are run
 
-    genome_size  :s => Give genome size to estimate coverage (can use mb or gb as suffix for megabases or gigabases)
-    kmer_ram:i      => To create Fastb and produce a 25-mer histogram, then tell me how many GB of RAM to use (0 switches it off)
-    threads:i       => Threads for building kmer table using allpaths (def 4). Meryl will only use 1 thread. 
-                      NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files but 
-                      these ought to have finished by the time kmer building starts (but this is not checked)
-    meryl           => force the use of meryl (keeps 25mer database)
-
+ Options
+    paired          => If 2 files have been provided, then treat them as a pair.
     cdna            => Input is cDNA
     gdna            => Input is gDNA
     no_preprocess   => Do not do any trimming    
-    
+    stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
+    backup          => If bz2 files provided, then re-compress them using parallel-bzip2 (e.g. if source is Baylor)
     no_screen       => Do not screen for contaminants using bowtie2
+
+ Screening options:
     rDNA        :s  => rDNA bowtie2 database
     contam      :s  => contaminants bowtie2 database
     human       :s  => human genome bowtie2 database (unless you're sequencing humans!)
@@ -45,13 +38,25 @@
     user_bowtie :s  => 1+ bowtie2 database array for optional custom screening. Must match -user_label
     user_label  :s  => 1+ this label will be used for custom screening. Must match -user_bowtie
     
-    paired          => If 2 files have been provided, then treat them as a pair.
+ These happen after any adaptor trimming (in this order)
     trim_5      :i  => Trim these many bases from the 5' (def 0)
-    trim_3      :i  => Trim these many bases from the 3' (def 0)
+    max_keep    :i  => Trim 3' end so that it is no longer than these many bases (def 0)
     qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
-    stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
-    backup          => If bz2 files provided, then re-compress them using parallel-bzip2 (e.g. if source is Baylor)
     max_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
+
+ These are not really used:
+    genome_size  :s => Give genome size to estimate coverage (can use mb or gb as suffix for megabases or gigabases)
+    kmer_ram:i      => To create Fastb and produce a 25-mer histogram, then tell me how many GB of RAM to use (0 switches it off)
+    threads:i       => Threads for building kmer table using allpaths (def 4). Meryl will only use 1 thread. 
+                      NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files but 
+                      these ought to have finished by the time kmer building starts (but this is not checked)
+    meryl           => force the use of meryl (keeps 25mer database)
+    sanger          => Force sanger Quality scores for fastq (otherwise autodetect)
+    illumina        => Force Illumina 1.3-1.7 qual scores (autodetect)
+    casava18        => Force input as Fastq from Casava 1.8 (autodetect)
+    noconvert_fastq => Don't convert to Sanger FASTQ flavour if Illumina 1.3 format is detected
+    dofasta         => Create FASTA file
+
 
 
 Alexie tip: For RNA-Seq, I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
@@ -129,7 +134,7 @@ GetOptions(
             'noconvert_fastq'    => \$noconvert_fastq,
             'paired'             => \$is_paired,
             'trim_5:i'           => \$trim_5,
-            'trim_3:i'           => \$trim_3,
+            'max_keep:i'           => \$trim_3,
             'stop_qc'            => \$stop_qc,
             'qtrim:i'            => \$qtrim,
             'backup'             => \$backup_bz2,
@@ -248,27 +253,18 @@ if ( $is_paired && $trimmomatic_exec ) {
  print "Pre-processing $file1 and $file2\n";
  my $check1 = &check_fastq_format($file1);
  my $check2 = &check_fastq_format($file2);
- my $cmd;
- $cmd =
-   $adapters_db
-   ? "java -jar $trimmomatic_exec PE -threads $cpus -phred33 "
-   . " $file1 $file2 "
-   . " $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired "
-   . " MINLEN:32 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
-   : "java -jar $trimmomatic_exec PE -threads $cpus -phred33 "
-   . " $file1 $file2 "
-   . " $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired SLIDINGWINDOW:8:10 "
-   . " MINLEN:32 LEADING:4 TRAILING:$qtrim ";
-
+ my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired MINLEN:32 ";
+ $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
  $cmd .= " CROP:$trim_3 " if $trim_3;
-
+ $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 ";
  if ( $check1 eq $check2 && ( $check1 eq 'illumina' ) ) {
   $cmd =~ s/phred33/phred64/;
   $cmd .= " TOPHRED33 ";
  }
  $cmd .= " MINLEN:$max_length 2>&1";
  &process_cmd($cmd) unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
+ die "Something bad happened... one of the files are empty/missing...\n" unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
  $files_to_delete_master{$file1}                 = 1;
  $files_to_delete_master{ $file1 . '.unpaired' } = 1;
  $files_to_delete_master{$file2}                 = 1;
@@ -292,24 +288,19 @@ else {
   my $file = $files[$i];
   print "Pre-processing $file\n";
   my $check = &check_fastq_format($file);
-  my $cmd;
-  $cmd =
-    $adapters_db
-    ? "java -jar $trimmomatic_exec SE -threads $cpus -phred33 "
-    . " $file $file.trimmomatic "
-    . " MINLEN:32 ILLUMINACLIP:$adapters_db:2:40:15 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 "
-    : "java -jar $trimmomatic_exec SE -threads $cpus -phred33 "
-    . " $file $file.trimmomatic "
-    . " MINLEN:32 LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 ";
-
+  my $cmd = "java -jar $trimmomatic_exec SE -threads $cpus -phred33 $file $file.trimmomatic MINLEN:32 ";
+  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if  $adapters_db;
   $cmd .= " HEADCROP:$trim_5 " if $trim_5;
   $cmd .= " CROP:$trim_3 " if $trim_3;
+  $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 ";
+
   if ( $check && $check eq 'illumina' ) {
    $cmd =~ s/phred33/phred64/;
    $cmd .= " TOPHRED33 ";
   }
   $cmd .= " MINLEN:$max_length 2>&1";
   &process_cmd($cmd) unless -s "$file.trimmomatic";
+  die "Something bad happened... one of the files are empty/missing...\n" unless -s "$file.trimmomatic";
   $files_to_delete_master{$file} = 1;
   $files_to_delete_master{ $file . '.unpaired' } = 1;
   $files[$i] .= '.trimmomatic';
