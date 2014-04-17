@@ -57,9 +57,9 @@
     noconvert_fastq => Don't convert to Sanger FASTQ flavour if Illumina 1.3 format is detected
     dofasta         => Create FASTA file
 
-
-
 Alexie tip: For RNA-Seq, I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
+
+I have seen Trimmomatic to inadvertedly shuffle reads when threads are used. So it runs with a single thread here.
 
 =head1 DEPENDECIES
 
@@ -253,7 +253,7 @@ if ( $is_paired && $trimmomatic_exec ) {
  print "Pre-processing $file1 and $file2\n";
  my $check1 = &check_fastq_format($file1);
  my $check2 = &check_fastq_format($file2);
- my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired MINLEN:32 ";
+ my $cmd = "java -jar $trimmomatic_exec PE -threads 1 -phred33 $file1 $file2 $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired MINLEN:32 ";
  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
  $cmd .= " CROP:$trim_3 " if $trim_3;
@@ -288,7 +288,7 @@ else {
   my $file = $files[$i];
   print "Pre-processing $file\n";
   my $check = &check_fastq_format($file);
-  my $cmd = "java -jar $trimmomatic_exec SE -threads $cpus -phred33 $file $file.trimmomatic MINLEN:32 ";
+  my $cmd = "java -jar $trimmomatic_exec SE -threads 1 -phred33 $file $file.trimmomatic MINLEN:32 ";
   $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if  $adapters_db;
   $cmd .= " HEADCROP:$trim_5 " if $trim_5;
   $cmd .= " CROP:$trim_3 " if $trim_3;
