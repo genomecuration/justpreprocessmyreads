@@ -42,7 +42,7 @@
     trim_5      :i  => Trim these many bases from the 5' (def 0)
     max_keep    :i  => Trim 3' end so that it is no longer than these many bases (def 0)
     qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
-    max_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
+    min_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
 
  These are not really used:
     genome_size  :s => Give genome size to estimate coverage (can use mb or gb as suffix for megabases or gigabases)
@@ -99,7 +99,9 @@ chomp($cwd);
 my $kmer_ram   = int(0);
 my $cpus       = 4;
 my $qtrim      = 5;
-my $max_length = 32;
+my $min_length = 32;
+my $slide_window  = 8 ; 
+my $slide_quality  = 10 ; 
 
 # edit these if you use it often with the same variables
 my $trimmomatic_exec = $RealBin . "/3rd_party/trimmomatic-0.32.jar";
@@ -140,7 +142,9 @@ GetOptions(
             'backup'             => \$backup_bz2,
             'trimmomatic:s'      => \$trimmomatic_exec,
             'noadaptors'         => \$noadaptors,
-            'max_length:i'       => \$max_length
+            'min_length:i'       => \$min_length,
+	    'slide_quality:i'    => \$slide_quality,
+	    'slide_window:i'    => \$slide_window,
 );
 my @files = @ARGV;
 
@@ -258,12 +262,12 @@ if ( $is_paired && $trimmomatic_exec ) {
  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
  $cmd .= " CROP:$trim_3 " if $trim_3;
- $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 ";
+ $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality ";
  if ( $check1 eq $check2 && ( $check1 eq 'illumina' ) ) {
   $cmd =~ s/phred33/phred64/;
   $cmd .= " TOPHRED33 ";
  }
- $cmd .= " MINLEN:$max_length 2>&1";
+ $cmd .= " MINLEN:$min_length 2>&1";
  &process_cmd($cmd) unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
  die "Something bad happened... one of the files are empty/missing...\n" unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
  $files_to_delete_master{$file1}                 = 1;
@@ -293,13 +297,13 @@ else {
   $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if  $adapters_db;
   $cmd .= " HEADCROP:$trim_5 " if $trim_5;
   $cmd .= " CROP:$trim_3 " if $trim_3;
-  $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:8:10 ";
+  $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality ";
 
   if ( $check && $check eq 'illumina' ) {
    $cmd =~ s/phred33/phred64/;
    $cmd .= " TOPHRED33 ";
   }
-  $cmd .= " MINLEN:$max_length 2>&1";
+  $cmd .= " MINLEN:$min_length 2>&1";
   &process_cmd($cmd) unless -s "$file.trimmomatic";
   die "Something bad happened... one of the files are empty/missing...\n" unless -s "$file.trimmomatic";
   $files_to_delete_master{$file} = 1;
@@ -425,7 +429,7 @@ sub check_fastq_format() {
  my $file = shift;
  die "No file or does not exist\n" unless $file && -s $file;
  open( FQ, $file );
- my $max_lines = 100000;
+ my $max_seqs = 10000;
  my $id        = <FQ>;
  die "File is not a fastq file:\n$id\n" unless ( $id =~ /^@/ );
  my ( @line, $l, $number, $counter );
@@ -435,7 +439,8 @@ sub check_fastq_format() {
   my $qual   = <FQ>;
   my $nextid = <FQ>;
   @line = split( //, $qual );    # divide in chars
-  for ( my $i = 0 ; $i <= $#line ; $i++ ) {    # for each char
+  for ( my $i = 0 ; $i < 200 ; $i++ ) {    # for each char
+   last if !$line[$i];
    $number = ord( $line[$i] );    # get the number represented by the ascii char
      # check if it is sanger or illumina/solexa, based on the ASCII image at http://en.wikipedia.org/wiki/FASTQ_format#Encoding
    if ( $number > 75 ) {    # if solexa/illumina
@@ -445,7 +450,7 @@ sub check_fastq_format() {
     return 'illumina';
    }
   }
-  last if $counter >= $max_lines;
+  last if $counter >= $max_seqs;
  }
  close FQ;
  if ( $number < 59 ) {      # if sanger
