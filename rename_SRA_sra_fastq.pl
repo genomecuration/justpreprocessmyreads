@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-my @dirs = glob("SRR??????");
+my @dirs = glob("?RR??????");
 
 foreach my $dir (@dirs){
 	next unless -d $dir;

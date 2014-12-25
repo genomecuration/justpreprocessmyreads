@@ -453,7 +453,7 @@ sub check_fastq_format() {
   last if $counter >= $max_seqs;
  }
  close FQ;
- if ( $number < 59 ) {      # if sanger
+ if ( $number < 75 ) {      # if sanger
   $id =~ /(\S+)\s*(\S*)/;
   my $description = $2;
   if ( $description && $description =~ /(\d)\:[A-Z]\:/ ) {
@@ -463,7 +463,7 @@ sub check_fastq_format() {
   print "This file is sanger format\n";    # print result to terminal and die
   return 'sanger';
  }
- die "Cannot determine fastq format\n";
+ die "Cannot determine fastq format ($number)\n";
 }
 
 sub prepare_r_histogram() {
