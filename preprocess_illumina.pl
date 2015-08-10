@@ -89,7 +89,7 @@ my ( $pbzip_exec, $fastqc_exec ) = &check_program( 'pbzip2', 'fastqc' );
 my (
      $is_sanger,   $do_fasta,     $genome_size,  $use_meryl,
      $is_illumina, $delete_fastb, $is_cdna,      $no_preprocess,
-     $casava,      @user_labels,  @user_bowties, $noconvert_fastq,
+     $is_casava,      @user_labels,  @user_bowties, $noconvert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman,
      $noadaptors, $trim_3
@@ -101,7 +101,7 @@ my $cpus       = 4;
 my $qtrim      = 5;
 my $min_length = 32;
 my $slide_window  = 8 ; 
-my $slide_quality  = 10 ; 
+my $slide_quality  = 8 ; 
 
 # edit these if you use it often with the same variables
 my $trimmomatic_exec = $RealBin . "/3rd_party/trimmomatic-0.32.jar";
@@ -130,7 +130,7 @@ GetOptions(
             'cdna'               => \$is_cdna,
             'gdna'               => \$is_gdna,
             'no_preprocess'      => \$no_preprocess,
-            'casava18'           => \$casava,
+            'casava18'           => \$is_casava,
             'user_bowtie:s{,}'   => \@user_bowties,
             'user_label:s{,}'    => \@user_labels,
             'noconvert_fastq'    => \$noconvert_fastq,
@@ -218,17 +218,10 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
   $files_to_delete_master{$file} = 1;
 
   $files[$i] = $file;
-  if ( !$casava && !$is_sanger && !$is_illumina ) {
    my $check = &check_fastq_format($file);
    $file_is_sanger   = 1 if $check eq 'sanger';
    $file_is_casava   = 1 if $check eq 'casava';
    $file_is_illumina = 1 if $check eq 'illumina';
-  }
-  else {
-   $file_is_sanger   = 1 if $is_sanger;
-   $file_is_casava   = 1 if $casava;
-   $file_is_illumina = 1 if $is_illumina;
-  }
   if ($file_is_casava) {
    $file_is_sanger = 1;
    undef($file_is_illumina);
@@ -428,32 +421,38 @@ sub screen_bowtie2() {
 sub check_fastq_format() {
  my $file = shift;
  die "No file or does not exist\n" unless $file && -s $file;
+ return 'sanger'  if $is_sanger;
+ return 'casava' if $is_casava;
+ return 'illumina' if $is_illumina;
  open( FQ, $file );
- my $max_seqs = 10000;
- my $id        = <FQ>;
- die "File is not a fastq file:\n$id\n" unless ( $id =~ /^@/ );
+ my $max_seqs = 1000000;
+ my $max_number = int(0);
  my ( @line, $l, $number, $counter );
- while ( my $seq = <FQ> ) {
+ my $id; # store for future
+ while ( $id = <FQ> ) {
   $counter++;
+  my $seq = <FQ>;
   my $qid    = <FQ>;
   my $qual   = <FQ>;
-  my $nextid = <FQ>;
+  die "File is not a fastq file:\n$id\n" unless ( $id =~ /^@/ );
   @line = split( //, $qual );    # divide in chars
-  for ( my $i = 0 ; $i < 200 ; $i++ ) {    # for each char
+  for ( my $i = 0 ; $i < length($qual) ; $i++ ) {    # for each char
    last if !$line[$i];
    $number = ord( $line[$i] );    # get the number represented by the ascii char
-     # check if it is sanger or illumina/solexa, based on the ASCII image at http://en.wikipedia.org/wiki/FASTQ_format#Encoding
-   if ( $number > 75 ) {    # if solexa/illumina
-    print "This file is solexa/illumina format\n"
-      ;                     # print result to terminal and die
-    close FQ;
-    return 'illumina';
-   }
+   if ($number > $max_number){
+	   $max_number = $number;
+	   # check if it is sanger or illumina/solexa, based on the ASCII image at http://en.wikipedia.org/wiki/FASTQ_format#Encoding
+	   if ( $max_number > 75 ) {    # if solexa/illumina
+	    print "This file is solexa/illumina format\n";                     # print result to terminal and die
+	    close FQ;
+	    return 'illumina';
+	   }
+  	}
   }
   last if $counter >= $max_seqs;
  }
  close FQ;
- if ( $number < 75 ) {      # if sanger
+ if ( $max_number < 59 ) {      # if sanger
   $id =~ /(\S+)\s*(\S*)/;
   my $description = $2;
   if ( $description && $description =~ /(\d)\:[A-Z]\:/ ) {
@@ -463,7 +462,7 @@ sub check_fastq_format() {
   print "This file is sanger format\n";    # print result to terminal and die
   return 'sanger';
  }
- die "Cannot determine fastq format ($number)\n";
+ die "Cannot determine fastq format. It is probably Illumina if this number is 60+ but not sure unless it is also 75+ ($max_number)\n";
 }
 
 sub prepare_r_histogram() {
