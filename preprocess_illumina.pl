@@ -2,6 +2,23 @@
 
 =pod
 
+=head1 TODO
+ 
+ new trimmomatic method about quality trimming (non-stringent vs stringent)
+
+ deduplicate. 
+
+ add blue
+
+ add kraken
+
+ multiple files
+
+ remove options not needed
+
+ add quality sanitization (too high values for sanger)
+
+ add length sanitization (too long reads 251 bp. last base is wrong)
 
 =head1 NAME
 
@@ -40,6 +57,7 @@
     
  These happen after any adaptor trimming (in this order)
     trim_5      :i  => Trim these many bases from the 5' (def 0)
+    trim_3      :i  => Trim these many bases from the 3' (def 0)
     max_keep    :i  => Trim 3' end so that it is no longer than these many bases (def 0)
     qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     min_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
@@ -92,7 +110,7 @@ my (
      $is_casava,      @user_labels,  @user_bowties, $noconvert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman,
-     $noadaptors, $trim_3
+     $noadaptors, $trim_3, $max_keep_3
 );
 my $cwd = `pwd`;
 chomp($cwd);
@@ -136,7 +154,8 @@ GetOptions(
             'noconvert_fastq'    => \$noconvert_fastq,
             'paired'             => \$is_paired,
             'trim_5:i'           => \$trim_5,
-            'max_keep:i'           => \$trim_3,
+            'trim_3:i'           => \$trim_3,
+            'max_keep:i'           => \$max_keep_3,
             'stop_qc'            => \$stop_qc,
             'qtrim:i'            => \$qtrim,
             'backup'             => \$backup_bz2,

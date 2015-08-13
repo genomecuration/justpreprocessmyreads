@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 3rd_party:
-	cd 3rd_party && unzip fastqc_v0.10.1.zip
+	cd 3rd_party && unzip fastqc_v*.zip && unzip Trimmomatic-*.zip
 
 prep_ecoli:
 	cd dbs && if [[ ! -s ecoli_pseudomonas.fsa.masked.nr.1.bt2 ]]; then echo "Downloading contam database"; wget "http://sourceforge.net/projects/justpreprocessmyreads/files/ecoli_pseudomonas.fsa.masked.nr.bz2/download" -O ecoli_pseudomonas.fsa.masked.nr.bz2; bunzip2 ecoli_pseudomonas.fsa.masked.nr.bz2; bowtie2-build ecoli_pseudomonas.fsa.masked.nr ecoli_pseudomonas.fsa.masked.nr; fi
