@@ -550,10 +550,6 @@ sub remove_dodgy_reads(){
     &process_cmd("$FastbQualbToFastq_exec HEAD_IN=clean HEAD_OUT=clean PAIRED=True PHRED_OFFSET=33 PICARD_NAMING_SCHEME=True NAMING_PREFIX=$do_deduplicate");
     unlink("clean.fastb","clean.qualb","clean.pairs","clean.readtrack");
     die "Deduplication failed\n" unless -s "clean.A.fastq" && -s "clean.B.fastq";
-    rename("clean.A.fastq",$file1.'.dedup');
-    rename("clean.B.fastq",$file2.'.dedup');
-    &process_cmd("$pbzip_exec -kp4 $file1.dedup $file2.dedup");
-    $files_to_delete_master{"$file1.dedup"} = 1;
-    $files_to_delete_master{"$file2.dedup"} = 1;
-
+    rename("clean.A.fastq",$file1);
+    rename("clean.B.fastq",$file2);
 }
