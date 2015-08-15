@@ -43,7 +43,6 @@
     backup          => If bz2 files provided, then re-compress them using parallel-bzip2 (e.g. if source is Baylor)
 
  Screening:
-    no_screen       => Do not screen for contaminants using bowtie2
     adapters        => Illumina adapters FASTA if also -trimmomatic (default provided)
     noadaptor       => Do not search for adaptors
 
@@ -67,13 +66,6 @@ Alexie tip: For RNA-Seq, I check the FASTQC report of the processed data but do 
 =head1 DEPENDECIES
 
  * pbzip2/gzip
- * fastqc
- * build_illumina_mates.pl (author: Alexie)
- * samtools
- * bowtie2
- * AllpathsLG or meryl (optional)
- * R
- * sed, ps2pdf
 
 =cut
 
@@ -397,62 +389,7 @@ sub check_fastq_format() {
  die "Cannot determine fastq format.\n";
 }
 
-sub prepare_r_histogram() {
- my $file = shift;
- return unless $file && -s $file;
- open( R, ">$file.R" );
- if ( $file =~ /spec/ ) {
-  print R 'data.25mer<-read.table(sep="\t",header=T,file="' . $file . '");';
-  print R "\n" . 'postscript(file="' . $file . '.ps");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[1:10],data.25mer$X2.num_distinct_kmers[1:10],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[1:20],data.25mer$X2.num_distinct_kmers[1:20],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[1:30],data.25mer$X2.num_distinct_kmers[1:30],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[3:30],data.25mer$X2.num_distinct_kmers[3:30],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[5:30],data.25mer$X2.num_distinct_kmers[5:30],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[3:50],data.25mer$X2.num_distinct_kmers[3:50],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[3:80],data.25mer$X2.num_distinct_kmers[3:80],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[3:100],data.25mer$X2.num_distinct_kmers[3:100],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[3:150],data.25mer$X2.num_distinct_kmers[3:150],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$X1.kmer_frequency[3:200],data.25mer$X2.num_distinct_kmers[3:200],type="l",col="red");';
- }
- else {
-  print R 'data.25mer<-read.table(sep="\t",header=F,file="' . $file . '");';
-  print R "\n" . 'postscript(file="' . $file . '.ps");';
-  print R "\n"
-    . 'plot(data.25mer$V1[1:10],data.25mer$V2[1:10],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[1:20],data.25mer$V2[1:20],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[1:30],data.25mer$V2[1:30],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[3:30],data.25mer$V2[3:30],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[5:30],data.25mer$V2[5:30],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[3:50],data.25mer$V2[3:50],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[3:80],data.25mer$V2[3:80],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[3:100],data.25mer$V2[3:100],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[3:150],data.25mer$V2[3:150],type="l",col="red");';
-  print R "\n"
-    . 'plot(data.25mer$V1[3:200],data.25mer$V2[3:200],type="l",col="red");';
- }
- print R "\n" . 'dev.off();';
- close R;
- return "$file.R";
-}
+
 
 sub process_cmd {
  my ( $cmd, $dir ) = @_;
@@ -506,77 +443,6 @@ sub illumina2sanger() {
  return $outfile;
 }
 
-sub do_genome_kmers() {
- my $infile = shift;
- die if !$infile || !-s $infile;
- my $format        = &check_fastq_format($infile);
- my $have_allpaths = `which FastqToFastbQualb`;
- my $have_meryl    = `which meryl`;
- if ( $have_allpaths && !$use_meryl ) {
-  print "Using allpathsLG to estimate kmer distribution for K=25\n";
-  my $is_mp_lib = ( "$infile" =~ /kb_/ ) ? int(1) : int(0);
-  if ( $is_mp_lib == 1 ) {
-   print
-"Warning: I think this is an MP outie library. Creating FASTB as MP, will not be useful to allpaths if this is a PE innie library\n";
-   if ( $format eq 'sanger' ) {
-    &process_cmd(
-"FastqToFastbQualb WRITE_QUALB=True REVERSE_READS=True FASTQ=$infile OUT_HEAD=$infile"
-    ) unless -s "$infile.fastb";
-   }
-   else {
-    &process_cmd(
-"FastqToFastbQualb WRITE_QUALB=True REVERSE_READS=True PHRED_64=True FASTQ=$infile OUT_HEAD=$infile"
-    ) unless -s "$infile.fastb";
-   }
-
-  }
-  else {
-   print
-"Warning: Creating FASTB as PE data (innie), will not be useful to allpaths if this is a MP outie library\n";
-   if ( $format eq 'sanger' ) {
-    &process_cmd(
-            "FastqToFastbQualb WRITE_QUALB=True FASTQ=$infile OUT_HEAD=$infile")
-      unless -s "$infile.fastb";
-   }
-   else {
-    &process_cmd(
-"FastqToFastbQualb WRITE_QUALB=True PHRED_64=True FASTQ=$infile OUT_HEAD=$infile"
-    ) unless -s "$infile.fastb";
-   }
-  }
-  &process_cmd(
-"KmerSpectrum K=25 HEAD=$infile MAX_MEMORY_GB=$kmer_ram NUM_THREADS=$cpus G_ESTIMATE=True PLOIDY=2 2>&1 | tee $infile.kmer.log"
-  ) unless -s "$infile.25mer.kspec";
-  if ( -s "$infile.25mer.kspec" ) {
-   &process_cmd( 'search_replace.pl -s "^ " -i ' . "$infile.25mer.kspec" );
-   &process_cmd(
-              'search_replace.pl -s "^# " -d -i ' . "$infile.25mer.kspec.out" );
-   &process_cmd(
-         'search_replace.pl -s " " -r "	" -d -i ' . "$infile.25mer.kspec.out" );
-   my $r_script = &prepare_r_histogram("$infile.25mer.kspec.out");
-   &process_cmd("R --no-save  --no-restore -q -f $r_script ") if $r_script;
-   &process_cmd("ps2pdf $infile.25mer.kspec.out.ps");
-  }
-  unlink("$infile.fastb") if $delete_fastb;
- }
- elsif ($have_meryl) {
-  my $meryl_ram = ( $kmer_ram * 1024 ) . 'MB';
-  print "Using meryl to estimate kmer distribution for K=25\n";
-  my $ram = $meryl_ram;
-  &process_cmd("meryl -B -C -m 25 -v -threads 2 -s $infile -o $infile")
-    unless -s "$infile.mcdat";
-  &process_cmd("meryl -Dh -s $infile > $infile.25mers")
-    unless -s "$infile.25mers";
-  my $r_script = &prepare_r_histogram("$infile.25mers");
-  &process_cmd("R --no-save  --no-restore -q -f $r_script ") if $r_script;
-  &process_cmd("ps2pdf $infile.25mers.ps");
- }
- else {
-  print
-"Warning: neither allpaths-LG nor meryl found in path. Will not create a kmer histogram\n";
- }
-}
-
 sub check_program() {
  my @paths;
  foreach my $prog (@_) {
@@ -590,17 +456,6 @@ sub check_program() {
  return @paths;
 }
 
-sub samtools_version_check() {
- my $samtools_exec = shift;
- my @version_lines = `$samtools_exec 2>&1`;
- foreach my $ln (@version_lines) {
-  if ( $ln =~ /^Version:\s+\d+\.(\d+).(\d+)/i ) {
-   die "Samtools version 1.19+ is needed\n" unless $1 >= 1 && $2 >= 19;
-
-   #print "Good: Samtools version 1.19+ found\n";
-  }
- }
-}
 
 sub fastq_to_fasta() {
  my $infile = shift || die("No input file");
