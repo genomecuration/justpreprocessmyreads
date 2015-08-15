@@ -42,7 +42,7 @@
  Screening:
     adapters        => Illumina adapters FASTA (default provided)
     noadaptor       => Do not search for adaptors
-    deduplicate     => Perform deduplication (will require RAM e.g. 8gb )
+    deduplicate :s  => Read name prefix and perform deduplication (will require RAM e.g. 4-12gb ). This will overwrite the readname prefix
 
  These happen after any adaptor trimming (in this order)
     trim_5      :i  => Trim these many bases from the 5' (def 0)
@@ -140,7 +140,7 @@ GetOptions(
 	    'slide_quality:i'    => \$slide_quality,
 	    'slide_window:i'    => \$slide_window,
 	    'mate_pair'=> \$mate_pair,
-	    'deduplicate' => \$do_deduplicate
+	    'deduplicate:s' => \$do_deduplicate
 ) || pod2usage();
 my @files = @ARGV;
 
@@ -275,6 +275,13 @@ if ( $is_paired && $trimmomatic_exec ) {
  ) unless -f "$file2.trimmomatic_fastqc.zip" || !$fastqc_exec;
  
  foreach my $thread (@threads) { $thread->join(); }
+ if ($max_keep_3 && $max_keep_3 >0){
+  print "Trimming 3' end to $max_keep_3 b.p.\n";
+  for ( my $i = 0 ; $i < @files ; $i++ ) {
+     &fastq_keep_trim3($files[0],$max_keep_3);
+     &fastq_keep_trim3($files[1],$max_keep_3);
+  }
+ }
  &remove_dodgy_reads($files[0],$files[1]) if $do_deduplicate;
  
 }
@@ -305,18 +312,18 @@ else {
                      "$fastqc_exec --noextract --nogroup -q $file.trimmomatic ")
   ) unless -f "$file.trimmomatic_fastqc.zip" || !$fastqc_exec;
  }
-}
-
-if ($max_keep_3 && $max_keep_3 >0){
+ if ($max_keep_3 && $max_keep_3 >0){
   print "Trimming 3' end to $max_keep_3 b.p.\n";
   for ( my $i = 0 ; $i < @files ; $i++ ) {
      &fastq_keep_trim3($files[$i],$max_keep_3);
   }
+ }
 }
 
 foreach my $thread (@threads) {
  $thread->join() if $thread->is_joinable();
 }
+
 print "Stage 1 completed\n";
 ##########################
 
@@ -360,31 +367,31 @@ sub check_fastq_format() {
   die "File is not a fastq file:\n$id\n" unless ( $id =~ /^@/ );
   @line = split( //, $qual );    # divide in chars
   for ( my $i = 0 ; $i < length($qual) ; $i++ ) {    # for each char
-   last if !$line[$i];
+   next if !$line[$i];
    $number = ord( $line[$i] );    # get the number represented by the ascii char
-   $min_number = $number if ($number < $min_number);
-   # check if it is sanger or illumina/solexa, based on the ASCII image at http://en.wikipedia.org/wiki/FASTQ_format#Encoding
-   if ( $min_number > 64 ) {    # if solexa/illumina
-    print "This file is solexa/illumina format\n";                     # print result to terminal and die
-    close FQ;
-    return 'illumina';
-   }
+   $min_number = $number if ($min_number == 0 || $number < $min_number);
   }
+  if ( $min_number > 45 ) {
+   print "This file is solexa/illumina format ($min_number)\n";
+   close FQ;
+   return 'illumina';
+  }
+
  }
  close FQ;
 
- if ( $min_number < 64 ) {      # if sanger
+ if ($min_number > 0 && $min_number < 20 ) {      # if sanger
   if ($id =~ /(\S+)\s*(\S*)/){
 	  my $description = $2;
 	  if ( $description && $description =~ /(\d)\:[A-Z]\:/ ) {
-	   print "This file is in Sanger quality but CASAVA 1.8 header format\n";
+	   print "This file is in Sanger quality but CASAVA 1.8 header format ($min_number)\n";
 	   return 'casava';
    }
   }
-  print "This file is sanger format\n";    # print result to terminal and die
+  print "This file is sanger format ($min_number)\n";    # print result to terminal and die
   return 'sanger';
  }
- die "Cannot determine fastq format.\n";
+ die "Cannot determine fastq format ($min_number)\n";
 }
 
 
@@ -521,7 +528,7 @@ sub remove_dodgy_reads(){
     my $MergePairedFastbs_exec  = &get_path('MergePairedFastbs');
     my $PairsFake_exec   = &get_path('PairsFake');
     # sadly using allpaths for deduplication... one day write it's code to use fastq.
-    my ($file1,$file2)=@_;
+    my ($file1,$file2,$prefix)=@_;
     
     my $cmd = "$FastqToFastbQualb_exec WRITE_QUALB=True ";
 
@@ -535,8 +542,10 @@ sub remove_dodgy_reads(){
     unlink("tmp.fastb","tmp.qualb","tmp.pairs");
     
     
-    &process_cmd("$FastbQualbToFastq_exec HEAD_IN=clean HEAD_OUT=clean PAIRED=True PHRED_OFFSET=33 PICARD_NAMING_SCHEME=True NAMING_PREFIX=$file1.clean");
+    &process_cmd("$FastbQualbToFastq_exec HEAD_IN=clean HEAD_OUT=clean PAIRED=True PHRED_OFFSET=33 PICARD_NAMING_SCHEME=True NAMING_PREFIX=$do_deduplicate");
     unlink("clean.fastb","clean.qualb","clean.pairs","clean.readtrack");
-    rename("clean.A.fastq",$file1);
-    rename("clean.B.fastq",$file2);
+    rename("clean.A.fastq",$file1.'.dedup');
+    rename("clean.B.fastq",$file2.'.dedup');
+    &process_cmd("$pbzip_exec -kp4 $file1.dedup $file2.dedup");
+
 }
