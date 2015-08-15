@@ -535,7 +535,7 @@ sub remove_dodgy_reads(){
     unlink("tmp.fastb","tmp.qualb","tmp.pairs");
     
     
-    &process_cmd("$FastbQualbToFastq_exec HEAD_IN=clean HEAD_OUT=clean PAIRED=True PHRED_OFFSET=33 PICARD_NAMING_SCHEME=True");
+    &process_cmd("$FastbQualbToFastq_exec HEAD_IN=clean HEAD_OUT=clean PAIRED=True PHRED_OFFSET=33 PICARD_NAMING_SCHEME=True NAMING_PREFIX=$file1.clean");
     unlink("clean.fastb","clean.qualb","clean.pairs","clean.readtrack");
     rename("clean.A.fastq",$file1);
     rename("clean.B.fastq",$file2);
