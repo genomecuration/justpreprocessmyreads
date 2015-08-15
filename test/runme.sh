@@ -10,6 +10,6 @@ printf "\n\nTest 2: Using also Trimmomatic and adaptor searching\n" |tee -a erro
 
 rm *trim* *zip -f
 printf "\n\nTest 3: Doing straight trimming with deduplication\n" |tee -a errors
-../preprocess_illumina.pl -paired -dedup -noadaptor test?.fastq.bz2 2>> errors
+../preprocess_illumina.pl -paired -dedup test -noadaptor test?.fastq.bz2 2>> errors
 
 printf "\n\nDONE! See errors file for any errors.\n"

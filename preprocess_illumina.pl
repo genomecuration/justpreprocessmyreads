@@ -282,8 +282,7 @@ if ( $is_paired && $trimmomatic_exec ) {
      &fastq_keep_trim3($files[1],$max_keep_3);
   }
  }
- &remove_dodgy_reads($files[0],$files[1]) if $do_deduplicate;
- 
+
 }
 else {
  for ( my $i = 0 ; $i < @files ; $i++ ) {
@@ -325,6 +324,10 @@ foreach my $thread (@threads) {
 }
 
 print "Stage 1 completed\n";
+##########################
+
+ &remove_dodgy_reads($files[0],$files[1]) if $is_paired && $do_deduplicate;
+
 ##########################
 
 for ( my $i = 0 ; $i < @files ; $i++ ) {
@@ -528,7 +531,7 @@ sub remove_dodgy_reads(){
     my $MergePairedFastbs_exec  = &get_path('MergePairedFastbs');
     my $PairsFake_exec   = &get_path('PairsFake');
     # sadly using allpaths for deduplication... one day write it's code to use fastq.
-    my ($file1,$file2,$prefix)=@_;
+    my ($file1,$file2)=@_;
     
     my $cmd = "$FastqToFastbQualb_exec WRITE_QUALB=True ";
 
@@ -547,5 +550,7 @@ sub remove_dodgy_reads(){
     rename("clean.A.fastq",$file1.'.dedup');
     rename("clean.B.fastq",$file2.'.dedup');
     &process_cmd("$pbzip_exec -kp4 $file1.dedup $file2.dedup");
+    $files_to_delete_master{"$file1.dedup"} = 1;
+    $files_to_delete_master{"$file2.dedup"} = 1;
 
 }
