@@ -73,7 +73,6 @@ use Data::Dumper;
 use threads;
 use Getopt::Long;
 use Pod::Usage;
-use BSD::Resource;
 use FindBin qw/$RealBin/;
 $ENV{PATH} .= ":$RealBin:$RealBin/3rd_party/FastQC/:$RealBin/3rd_party/allpaths/";
 
