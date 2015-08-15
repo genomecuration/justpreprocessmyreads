@@ -58,7 +58,7 @@
  These happen after any adaptor trimming (in this order)
     trim_5      :i  => Trim these many bases from the 5' (def 0)
     trim_3      :i  => Trim these many bases from the 3' (def 0)
-    max_keep    :i  => Trim 3' end so that it is no longer than these many bases (def 0)
+    max_keep    :i  => Trim 3' end so that it is no longer than these many bases (def 0 ie not used)
     qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     min_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
 
@@ -327,6 +327,13 @@ else {
                      "$fastqc_exec --noextract --nogroup -q $file.trimmomatic ")
   ) unless -f "$file.trimmomatic_fastqc.zip" || !$fastqc_exec;
  }
+}
+
+if ($max_keep_3 && $max_keep_3 >0){
+  print "Trimming 3' end to $max_keep_3 b.p.\n";
+  for ( my $i = 0 ; $i < @files ; $i++ ) {
+     &fastq_keep_trim3($files[$i],$max_keep_3);
+  }
 }
 
 print "Stage 1 completed\n";
@@ -713,3 +720,29 @@ sub fastq_to_fasta() {
  close OUT;
  system("$pbzip_exec -p4 $output");
 }
+
+sub fastq_keep_trim3(){
+    my ($file,$max_size)=@_;
+    open (IN,$file) || die $!;
+    open (OUT,">$file.x")||die $!;
+    while (my $id=<IN>){
+        my $seq = <IN>;
+        my $qid = <IN>;
+        my $qlt = <IN>;
+        
+        if (length($seq) > ($max_size+1)){
+            chomp($seq);chomp($qlt);
+            $seq = substr($seq,0,$max_size)."\n";
+            $qlt = substr($qlt,0,$max_size)."\n";
+            
+        }
+        print OUT $id.$seq.$qid.$qlt;
+    }
+    
+
+    close IN;
+    close OUT;
+    rename("$file.x",$file);
+}
+
+
