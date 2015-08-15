@@ -29,11 +29,10 @@
  Preprocess Illumina data and create archives. This involves trimming based on quality, converting to FASTA, getting rid of Ns etc.
  Simply give one or more FASTQ files either .bz2, .gz or uncompressed
 
- Requires ALLPATHS-LG or meryl for kmer-hist
-
  Needs pbzip2
     
     debug           => Verbose output. Prints out commands before they are run
+    threads:i       => Number of CPUs to use. NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files 
 
  Options
     paired          => If 2 files have been provided, then treat them as a pair.
@@ -42,33 +41,21 @@
     no_preprocess   => Do not do any trimming    
     stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
     backup          => If bz2 files provided, then re-compress them using parallel-bzip2 (e.g. if source is Baylor)
-    no_screen       => Do not screen for contaminants using bowtie2
 
- Screening options:
-    rDNA        :s  => rDNA bowtie2 database
-    contam      :s  => contaminants bowtie2 database
-    human       :s  => human genome bowtie2 database (unless you're sequencing humans!)
-    nohuman         => Don't search the human genome
+ Screening:
+    no_screen       => Do not screen for contaminants using bowtie2
     adapters        => Illumina adapters FASTA if also -trimmomatic (default provided)
     noadaptor       => Do not search for adaptors
-    trimmomatic     => Trimmomatic jar file
-    user_bowtie :s  => 1+ bowtie2 database array for optional custom screening. Must match -user_label
-    user_label  :s  => 1+ this label will be used for custom screening. Must match -user_bowtie
-    
+
  These happen after any adaptor trimming (in this order)
     trim_5      :i  => Trim these many bases from the 5' (def 0)
     trim_3      :i  => Trim these many bases from the 3' (def 0)
-    max_keep    :i  => Trim 3' end so that it is no longer than these many bases (def 0 ie not used)
+    max_keep    :i  => Trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def 0 ie not used)
     qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     min_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
+    
 
- These are not really used:
-    genome_size  :s => Give genome size to estimate coverage (can use mb or gb as suffix for megabases or gigabases)
-    kmer_ram:i      => To create Fastb and produce a 25-mer histogram, then tell me how many GB of RAM to use (0 switches it off)
-    threads:i       => Threads for building kmer table using allpaths (def 4). Meryl will only use 1 thread. 
-                      NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files but 
-                      these ought to have finished by the time kmer building starts (but this is not checked)
-    meryl           => force the use of meryl (keeps 25mer database)
+ Quality is auto-calculated based on the minimum number found but
     sanger          => Force sanger Quality scores for fastq (otherwise autodetect)
     illumina        => Force Illumina 1.3-1.7 qual scores (autodetect)
     casava18        => Force input as Fastq from Casava 1.8 (autodetect)
@@ -76,8 +63,6 @@
     dofasta         => Create FASTA file
 
 Alexie tip: For RNA-Seq, I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
-
-I have seen Trimmomatic to inadvertedly shuffle reads when threads are used. So it runs with a single thread here.
 
 =head1 DEPENDECIES
 
@@ -100,7 +85,7 @@ use Getopt::Long;
 use Pod::Usage;
 use BSD::Resource;
 use FindBin qw/$RealBin/;
-$ENV{PATH} .= ":$RealBin:$RealBin/3rd_party/FastQC/";
+$ENV{PATH} .= ":$RealBin:$RealBin/3rd_party/FastQC/:$RealBin/3rd_party/allpaths/";
 
 my ( $pbzip_exec, $fastqc_exec ) = &check_program( 'pbzip2', 'fastqc' );
 
@@ -110,7 +95,7 @@ my (
      $is_casava,      @user_labels,  @user_bowties, $noconvert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman,
-     $noadaptors, $trim_3, $max_keep_3
+     $noadaptors, $trim_3, $max_keep_3, $mate_pair
 );
 my $cwd = `pwd`;
 chomp($cwd);
@@ -164,6 +149,7 @@ GetOptions(
             'min_length:i'       => \$min_length,
 	    'slide_quality:i'    => \$slide_quality,
 	    'slide_window:i'    => \$slide_window,
+	    'mate_pair'=> \$mate_pair
 );
 my @files = @ARGV;
 
@@ -294,11 +280,13 @@ if ( $is_paired && $trimmomatic_exec ) {
        &create_fork(
                     "$fastqc_exec --noextract --nogroup -q $file1.trimmomatic ")
  ) unless -f "$file1.trimmomatic_fastqc.zip" || !$fastqc_exec;
- push(
-       @threads,
-       &create_fork(
-                    "$fastqc_exec --noextract --nogroup -q $file2.trimmomatic ")
+ push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file2.trimmomatic ")
  ) unless -f "$file2.trimmomatic_fastqc.zip" || !$fastqc_exec;
+ 
+ foreach my $thread (@threads) { $thread->join(); }
+ 
+ &remove_dodgy_reads($file1,$file2);
+ 
 }
 else {
  for ( my $i = 0 ; $i < @files ; $i++ ) {
@@ -336,6 +324,9 @@ if ($max_keep_3 && $max_keep_3 >0){
   }
 }
 
+foreach my $thread (@threads) {
+ $thread->join() if $thread->is_joinable();
+}
 print "Stage 1 completed\n";
 ##########################
 
@@ -344,13 +335,12 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
  print "Post-processing $file\n";
  &fastq_to_fasta("$file")  if $do_fasta;
  &do_genome_kmers("$file") if $kmer_ram > 0;
- &screen_bowtie2( $files[$i] ) unless $no_screen || !-s $files[$i];
  $files_to_delete_master{$file} = 1;
 }
 
 print "Completed. Compressing/cleaning up...\n";
 foreach my $thread (@threads) {
- $thread->join();
+ $thread->join() if $thread->is_joinable();
 }
 
 &process_cmd(   "$pbzip_exec -fvp$cpus "
@@ -359,90 +349,7 @@ foreach my $thread (@threads) {
   if %files_to_delete_master && scalar( keys %files_to_delete_master ) > 0;
 
 ##################################################################################################
-sub screen_bowtie2() {
- my $file = shift;
- my ( $bowtie2_exec, $samtools_exec ) = &check_program( 'bowtie2', 'samtools' );
- print "Screening for contaminants\n";
- if ( $is_cdna && !-s $file . "_vs_rDNA.bam" && $rDNA_db ) {
-  print "\tInvertrebrate rRNA\n";
 
-#  &process_cmd("kanga -T $cpus -i $file -I $rDNA_db -r2 -R300 -M5 -F "  . $file . "_vs_rDNA.log -o " . $file . "_vs_rDNA.sam" );
-  &process_cmd(
-"$bowtie2_exec --threads $cpus --fast --no-unal -x $rDNA_db -U $file 2> $file"
-     . "_vs_rDNA.log |$samtools_exec view -S -F4 -b -o $file"
-     . "_vs_rDNA.bam - > /dev/null" )
-    unless -s $file . "_vs_rDNA.log";
-  system(   "$samtools_exec view $file"
-          . "_vs_rDNA.bam |cut -f 2|sort -n |uniq -c >> $file"
-          . "_vs_rDNA.log " );
-  sleep(3);
- }
- print "\tEcoli/Pseudomonas\n";
- if ( !-s $file . "_vs_contam.bam" && $contam_db ) {
-
-#  &process_cmd( "kanga -T $cpus -i $file -I $contam_db -r2 -R300 -M5 -F "    . $file   . "_vs_contam.log -o "   . $file   . "_vs_contam.sam" );
-  &process_cmd(
-"$bowtie2_exec --threads $cpus --fast --no-unal -x $contam_db -U $file 2> $file"
-     . "_vs_contam.log |$samtools_exec view -S -F4 -b -o $file"
-     . "_vs_contam.bam - > /dev/null" )
-    unless -s $file . "_vs_contam.log";
-  system(   "$samtools_exec view $file"
-          . "_vs_contam.bam |cut -f 2|sort -n |uniq -c >> $file"
-          . "_vs_contam.log " );
-  sleep(3);
- }
-
- print "\tPhiX 174 / Illumina control\n";
- if ( !-s $file . "_vs_phix.bam" && $phix_db ) {
-
-#  &process_cmd(  "kanga -T $cpus -i $file -I $phix_db -r2 -R300 -M5 -F " . $file    . "_vs_phix.log -o "    . $file    . "_vs_phix.sam" );
-  &process_cmd(
-"$bowtie2_exec --threads $cpus --fast --no-unal -x $phix_db -U $file 2> $file"
-     . "_vs_phix.log |$samtools_exec view -S -F4 -b -o $file"
-     . "_vs_phix.bam - > /dev/null" )
-    unless -s $file . "_vs_phix.log";
-  system(   "$samtools_exec view $file"
-          . "_vs_phix.bam |cut -f 2|sort -n |uniq -c >> $file"
-          . "_vs_phix.log " );
-  sleep(3);
- }
-
- if ( !-s $file . "_vs_human.bam" && $human_db && !$nohuman ) {
-  print "\tHuman genome\n";
-
-#  &process_cmd(  "kanga -T $cpus -i $file -I $human_db -r0 -R300 -M5 -F " . $file    . "_vs_human.log -o "    . $file    . "_vs_human.sam" );
-  &process_cmd(
-"$bowtie2_exec --threads $cpus --fast --no-unal -x $human_db -U $file 2> $file"
-     . "_vs_human.log |$samtools_exec view -S -F4 -b -o  $file"
-     . "_vs_human.bam - > /dev/null" )
-    unless -s $file . "_vs_human.log";
-  system(   "$samtools_exec view $file"
-          . "_vs_human.bam |cut -f 2|sort -n |uniq -c >> $file"
-          . "_vs_human.log " );
-  sleep(3);
- }
-
- for ( my $i = 0 ; $i < scalar(@user_bowties) ; $i++ ) {
-  my $user_bowtie = $user_bowties[$i];
-  my $user_label  = $user_labels[$i];
-  if ( $user_bowtie && -s $user_bowtie.'.1.bt2') {
-   print "\tUser specified bowtie file $user_bowtie (labelled $user_label)\n";
-   if ( !-s $file . "_vs_$user_label.bam" ) {
-
-#   &process_cmd(   "kanga -T $cpus -i $file -I $user_bowtie -r2 -R300 -M5 -F "  . $file . "_vs_$user_label.log -o " . $file . "_vs_$user_label.sam" );
-    &process_cmd(
-"$bowtie2_exec --threads $cpus --fast --no-unal -x $user_bowtie -U $file 2> $file"
-       . "_vs_$user_label.log | $samtools_exec view -S -F4 -b -o  $file"
-       . "_vs_$user_label.bam - > /dev/null" )
-      unless -s $file . "_vs_$user_label.log";
-    system(   "$samtools_exec view $file"
-            . "_vs_$user_label.bam |cut -f 2|sort -n |uniq -c >> $file"
-            . "_vs_$user_label.log " );
-    sleep(3);
-   }
-  }
- }
-}
 
 sub check_fastq_format() {
  my $file = shift;
@@ -745,4 +652,38 @@ sub fastq_keep_trim3(){
     rename("$file.x",$file);
 }
 
+sub get_path(){
+    my $file = shift ||die;
+    my $path = &check_program($file);
+    die $! unless $path;
+    $path = `which $file`;chomp($path);
+    die unless $path;
+    return $path;
+}
 
+sub remove_dodgy_reads(){
+    my $FastbQualbToFastq_exec = &get_path('FastbQualbToFastq');
+    my $FastqToFastbQualb_exec = &get_path('FastqToFastbQualb');
+    my $RemoveDodgyReads_exec = &get_path('RemoveDodgyReads');
+    my $MergePairedFastbs_exec  = &get_path('MergePairedFastbs');
+    my $PairsFake_exec   = &get_path('PairsFake');
+    # sadly using allpaths for deduplication... one day write it's code to use fastq.
+    my ($file1,$file2)=@_;
+    
+    my $cmd = "$FastqToFastbQualb_exec WRITE_QUALB=True ";
+
+    &process_cmd($cmd." FASTQ=$file1 OUT_HEAD=$file1");
+    &process_cmd($cmd." FASTQ=$file2 OUT_HEAD=$file2");
+    &process_cmd($MergePairedFastbs_exec. " HEAD1_IN=$file1 HEAD2_IN=$file2 HEAD_OUT=tmp WRITE_PAIRS=True");
+    unlink("$file1.fastb","$file1.qualb");
+    unlink("$file2.fastb","$file2.qualb");
+    
+    &process_cmd($RemoveDodgyReads_exec." REMOVE_POLY_A=False NUM_THREADS=$cpus IN_HEAD=tmp OUT_HEAD=clean");
+    unlink("tmp.fastb","tmp.qualb","tmp.pairs");
+    
+    
+    &process_cmd("$FastbQualbToFastq_exec HEAD_IN=clean HEAD_OUT=clean PAIRED=True PHRED_OFFSET=33 PICARD_NAMING_SCHEME=True");
+    unlink("clean.fastb","clean.qualb","clean.pairs","clean.readtrack");
+    rename("clean.A.fastq",$file1);
+    rename("clean.B.fastq",$file2);
+}
