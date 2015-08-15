@@ -445,43 +445,42 @@ sub check_fastq_format() {
  return 'illumina' if $is_illumina;
  open( FQ, $file );
  my $max_seqs = 1000000;
- my $max_number = int(0);
+ my $min_number = int(0);
  my ( @line, $l, $number, $counter );
  my $id; # store for future
- while ( $id = <FQ> ) {
-  $counter++;
-  my $seq = <FQ>;
-  my $qid    = <FQ>;
-  my $qual   = <FQ>;
+ for (my $counter=0;$counter<$max_seqs;$counter++){
+	$id = <FQ> || last;
+	my $seq = <FQ>;
+	my $qid    = <FQ>;
+	my $qual   = <FQ>;
   die "File is not a fastq file:\n$id\n" unless ( $id =~ /^@/ );
   @line = split( //, $qual );    # divide in chars
   for ( my $i = 0 ; $i < length($qual) ; $i++ ) {    # for each char
    last if !$line[$i];
    $number = ord( $line[$i] );    # get the number represented by the ascii char
-   if ($number > $max_number){
-	   $max_number = $number;
-	   # check if it is sanger or illumina/solexa, based on the ASCII image at http://en.wikipedia.org/wiki/FASTQ_format#Encoding
-	   if ( $max_number > 75 ) {    # if solexa/illumina
-	    print "This file is solexa/illumina format\n";                     # print result to terminal and die
-	    close FQ;
-	    return 'illumina';
-	   }
-  	}
+   $min_number = $number if ($number < $min_number);
+   # check if it is sanger or illumina/solexa, based on the ASCII image at http://en.wikipedia.org/wiki/FASTQ_format#Encoding
+   if ( $min_number > 64 ) {    # if solexa/illumina
+    print "This file is solexa/illumina format\n";                     # print result to terminal and die
+    close FQ;
+    return 'illumina';
+   }
   }
-  last if $counter >= $max_seqs;
  }
  close FQ;
- if ( $max_number < 59 ) {      # if sanger
-  $id =~ /(\S+)\s*(\S*)/;
-  my $description = $2;
-  if ( $description && $description =~ /(\d)\:[A-Z]\:/ ) {
-   print "This file is in Sanger quality but CASAVA 1.8 header format\n";
-   return 'casava';
+
+ if ( $min_number < 64 ) {      # if sanger
+  if ($id =~ /(\S+)\s*(\S*)/){
+	  my $description = $2;
+	  if ( $description && $description =~ /(\d)\:[A-Z]\:/ ) {
+	   print "This file is in Sanger quality but CASAVA 1.8 header format\n";
+	   return 'casava';
+   }
   }
   print "This file is sanger format\n";    # print result to terminal and die
   return 'sanger';
  }
- die "Cannot determine fastq format. It is probably Illumina if this number is 60+ but not sure unless it is also 75+ ($max_number)\n";
+ die "Cannot determine fastq format.\n";
 }
 
 sub prepare_r_histogram() {
