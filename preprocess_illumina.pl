@@ -6,8 +6,6 @@
  
  new trimmomatic method about quality trimming (non-stringent vs stringent)
 
- deduplicate. 
-
  add blue
 
  add kraken
@@ -38,13 +36,13 @@
     paired          => If 2 files have been provided, then treat them as a pair.
     cdna            => Input is cDNA
     gdna            => Input is gDNA
-    no_preprocess   => Do not do any trimming    
     stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
     backup          => If bz2 files provided, then re-compress them using parallel-bzip2 (e.g. if source is Baylor)
 
  Screening:
-    adapters        => Illumina adapters FASTA if also -trimmomatic (default provided)
+    adapters        => Illumina adapters FASTA (default provided)
     noadaptor       => Do not search for adaptors
+    deduplicate     => Perform deduplication (will require RAM e.g. 8gb )
 
  These happen after any adaptor trimming (in this order)
     trim_5      :i  => Trim these many bases from the 5' (def 0)
@@ -87,7 +85,7 @@ my (
      $is_casava,      @user_labels,  @user_bowties, $noconvert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman,
-     $noadaptors, $trim_3, $max_keep_3, $mate_pair
+     $noadaptors, $trim_3, $max_keep_3, $mate_pair,$do_deduplicate
 );
 my $cwd = `pwd`;
 chomp($cwd);
@@ -141,8 +139,9 @@ GetOptions(
             'min_length:i'       => \$min_length,
 	    'slide_quality:i'    => \$slide_quality,
 	    'slide_window:i'    => \$slide_window,
-	    'mate_pair'=> \$mate_pair
-);
+	    'mate_pair'=> \$mate_pair,
+	    'deduplicate' => \$do_deduplicate
+) || pod2usage();
 my @files = @ARGV;
 
 pod2usage "Trimmomatic is now required.\n" if !$trimmomatic_exec;
@@ -276,8 +275,7 @@ if ( $is_paired && $trimmomatic_exec ) {
  ) unless -f "$file2.trimmomatic_fastqc.zip" || !$fastqc_exec;
  
  foreach my $thread (@threads) { $thread->join(); }
- 
- &remove_dodgy_reads($file1,$file2);
+ &remove_dodgy_reads($files[0],$files[1]) if $do_deduplicate;
  
 }
 else {

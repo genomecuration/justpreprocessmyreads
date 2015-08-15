@@ -34,17 +34,10 @@ pbzip2
  Debian/Ubuntu:
  apt-get install pbzip2
 
-samtools
- Heng Li
- http://samtools.sourceforge.net
- Debian/Ubuntu:
- apt-get install samtools
-
 fastqc
  simon.andrews@babraham.ac.uk
  http://www.bioinformatics.bbsrc.ac.uk
 
-bowtie2
- Ben Langmead (blangmea@jhsph.edu)
- http://bowtie-bio.sourceforge.net/bowtie2/index.shtml
- apt-get install bowtie2
+allpathslg
+ http://www.broadinstitute.org/software/allpaths-lg/blog/
+
