@@ -357,44 +357,46 @@ sub check_fastq_format() {
  return 'sanger'  if $is_sanger;
  return 'casava' if $is_casava;
  return 'illumina' if $is_illumina;
- open( FQ, $file );
- my $max_seqs = 1000000;
- my $min_number = int(0);
+ my $max_seqs = 100000;
+ my ($min_number,$max_number); 
  my ( @line, $l, $number, $counter );
  my $id; # store for future
+
+ open( FQ, $file );
  for (my $counter=0;$counter<$max_seqs;$counter++){
-	$id = <FQ> || last;
-	my $seq = <FQ>;
-	my $qid    = <FQ>;
-	my $qual   = <FQ>;
+        $id = <FQ> || last;
+        my $seq = <FQ>;
+        my $qid    = <FQ>;
+        my $qual   = <FQ>;
   die "File is not a fastq file:\n$id\n" unless ( $id =~ /^@/ );
+  chomp($qual);
   @line = split( //, $qual );    # divide in chars
   for ( my $i = 0 ; $i < length($qual) ; $i++ ) {    # for each char
-   next if !$line[$i];
    $number = ord( $line[$i] );    # get the number represented by the ascii char
-   $min_number = $number if ($min_number == 0 || $number < $min_number);
+   $min_number = $number if (!$min_number || $number < $min_number);
+   $max_number = $number if (!$max_number || $number > $max_number);
+   # check if it is sanger or illumina/solexa, based on the ASCII image at http://en.wikipedia.org/wiki/FASTQ_format#Encoding
   }
-  if ( $min_number > 45 ) {
-   print "This file is solexa/illumina format ($min_number)\n";
-   close FQ;
-   return 'illumina';
-  }
-
  }
  close FQ;
 
- if ($min_number > 0 && $min_number < 20 ) {      # if sanger
+ if ( $min_number >= 75 ) {    # if solexa/illumina
+    print "This file is solexa/illumina format ($min_number,$max_number)\n";
+    close FQ;
+    return 'illumina';
+  }
+ elsif ($min_number < 50 ) {      # if sanger
   if ($id =~ /(\S+)\s*(\S*)/){
-	  my $description = $2;
-	  if ( $description && $description =~ /(\d)\:[A-Z]\:/ ) {
-	   print "This file is in Sanger quality but CASAVA 1.8 header format ($min_number)\n";
-	   return 'casava';
+          my $description = $2;
+          if ( $description && $description =~ /(\d)\:[A-Z]\:/ ) {
+           print "This file is in Sanger quality but CASAVA 1.8 header format ($min_number,$max_number)\n";
+           return 'casava';
    }
   }
-  print "This file is sanger format ($min_number)\n";    # print result to terminal and die
+  print "This file is sanger format ($min_number,$max_number)\n";    # print result to terminal and die
   return 'sanger';
  }
- die "Cannot determine fastq format ($min_number)\n";
+ die "Cannot determine fastq format ($min_number,$max_number)\n";
 }
 
 
