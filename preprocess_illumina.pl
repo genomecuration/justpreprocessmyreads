@@ -43,9 +43,9 @@
     -deduplicate :s  => Read name prefix and perform deduplication (will require RAM e.g. 4-12gb ). This will overwrite the readname prefix
 
  These happen after any adaptor trimming (in this order)
-    -trim_5      :i  => Trim these many bases from the 5' (def 0)
-    -trim_3      :i  => Trim these many bases from the 3' (def 0)
-    -max_keep    :i  => Trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def 0 ie not used)
+    -trim_5      :i  => Trim these many bases from the 5'. Happens before quality trimming but after adaptor trimming (def 0)
+    -trim_3      :i  => Trim these many bases from the 3'. Happens before quality trimming but after adaptor trimming (def 1)
+    -max_keep    :i  => Trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def 0 ie not used as it is taken care of by -trim_3)
     -qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     -min_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
     
@@ -82,10 +82,11 @@ my (
      $is_casava,      @user_labels,  @user_bowties, $noconvert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman,
-     $noadaptors, $trim_3, $max_keep_3, $mate_pair,$do_deduplicate
+     $noadaptors, $max_keep_3, $mate_pair,$do_deduplicate
 );
 my $cwd = `pwd`;
 chomp($cwd);
+my $trim_3     = 1;
 my $kmer_ram   = int(0);
 my $cpus       = 4;
 my $qtrim      = 5;
