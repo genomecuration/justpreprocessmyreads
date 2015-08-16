@@ -30,7 +30,7 @@
  Needs pbzip2
     
     -debug           => Verbose output. Prints out commands before they are run
-    -threads:i       => Number of CPUs to use. NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files 
+    -threads     :i  => Number of CPUs to use. NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files 
 
  Options
     -paired          => If 2 files have been provided, then treat them as a pair.
