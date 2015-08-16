@@ -44,8 +44,7 @@
 
  These happen after any adaptor trimming (in this order)
     -trim_5      :i  => Trim these many bases from the 5'. Happens before quality trimming but after adaptor trimming (def 0)
-    -trim_3      :i  => Trim these many bases from the 3'. Happens before quality trimming but after adaptor trimming (def 1)
-    -max_keep    :i  => Trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def 0 ie not used as it is taken care of by -trim_3)
+    -max_keep    :i  => Trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def automatic to closest whole 10 b.p decrement - 100, 150, 170 etc - if not user specified)
     -qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     -min_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
     
@@ -86,7 +85,6 @@ my (
 );
 my $cwd = `pwd`;
 chomp($cwd);
-my $trim_3     = 1;
 my $kmer_ram   = int(0);
 my $cpus       = 4;
 my $qtrim      = 5;
@@ -127,8 +125,7 @@ GetOptions(
             'noconvert_fastq'    => \$noconvert_fastq,
             'paired'             => \$is_paired,
             'trim_5:i'           => \$trim_5,
-            'trim_3:i'           => \$trim_3,
-            'max_keep:i'           => \$max_keep_3,
+            'max_keep:i'         => \$max_keep_3,
             'stop_qc'            => \$stop_qc,
             'qtrim:i'            => \$qtrim,
             'backup'             => \$backup_bz2,
@@ -224,7 +221,7 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
              'sed --in-place \'s/^@\([^ ]*\) \([0-9]\).*/@\1\/\2/\' ' . $file );
   }
   $files_to_delete_master{$file} = 1;
-  my $fastqc_basename = $file;$fastqc_basename=~s/\.\S+$//;$fastqc_basename.='_fastqc'; # probably
+  my $fastqc_basename = $file;$fastqc_basename=~s/\.[^\.\-\_]+$//;$fastqc_basename.='_fastqc'; # probably
   push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file") )
     unless -s $fastqc_basename . ".zip" || !$fastqc_exec;
   $files_to_delete_master{$fastqc_basename.".html"} = 1;
@@ -233,12 +230,14 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
 
 if ($stop_qc) {
  foreach my $thread (@threads) {
-  $thread->join();
+  $thread->join() if $thread->is_joinable();
  }
  print "User asked to stop after QC\n";
  exit(0);
 }
 
+###############################
+# TRIMMING
 ###############################
 if ( $is_paired && $trimmomatic_exec ) {
  my $file1 = $files[0];
@@ -250,7 +249,7 @@ if ( $is_paired && $trimmomatic_exec ) {
  my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.trim.unpaired $file2.trimmomatic $file2.trim.unpaired MINLEN:32 ";
  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
- $cmd .= " CROP:$trim_3 " if $trim_3;
+ $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >0;
  $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality ";
  if ( $check1 eq $check2 && ( $check1 eq 'illumina' ) ) {
   $cmd =~ s/phred33/phred64/;
@@ -266,14 +265,6 @@ if ( $is_paired && $trimmomatic_exec ) {
 
  $files[0] .= '.trimmomatic';
  $files[1] .= '.trimmomatic';
- if ($max_keep_3 && $max_keep_3 >0){
-  print "Trimming 3' end to $max_keep_3 b.p.\n";
-  for ( my $i = 0 ; $i < @files ; $i++ ) {
-     &fastq_keep_trim3($files[0],$max_keep_3);
-     &fastq_keep_trim3($files[1],$max_keep_3);
-  }
- }
-
 }else {
  for ( my $i = 0 ; $i < @files ; $i++ ) {
   my $file = $files[$i];
@@ -282,7 +273,7 @@ if ( $is_paired && $trimmomatic_exec ) {
   my $cmd = "java -jar $trimmomatic_exec SE -threads $cpus -phred33 $file $file.trimmomatic MINLEN:32 ";
   $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if  $adapters_db;
   $cmd .= " HEADCROP:$trim_5 " if $trim_5;
-  $cmd .= " CROP:$trim_3 " if $trim_3;
+  $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >0;
   $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality ";
 
   if ( $check && $check eq 'illumina' ) {
@@ -295,17 +286,9 @@ if ( $is_paired && $trimmomatic_exec ) {
   $files_to_delete_master{$file} = 1;
   $files[$i] .= '.trimmomatic';
  }
- if ($max_keep_3 && $max_keep_3 >0){
-  print "Trimming 3' end to $max_keep_3 b.p.\n";
-  for ( my $i = 0 ; $i < @files ; $i++ ) {
-     &fastq_keep_trim3($files[$i],$max_keep_3);
-  }
- }
 }
 
-foreach my $thread (@threads) {
- $thread->join() if $thread->is_joinable();
-}
+foreach my $thread (@threads) { $thread->join() if $thread->is_joinable();}
 
 print "Stage 1 completed\n";
 ##########################
@@ -313,15 +296,12 @@ print "Stage 1 completed\n";
 &remove_dodgy_reads($files[0],$files[1]) if $is_paired && $do_deduplicate;
 
 ##########################
-
 foreach my $file (@files){
-
-  my $fastqc_basename = $file;$fastqc_basename=~s/\.\S+$//;$fastqc_basename.='_fastqc'; # probably
+  my $fastqc_basename = $file;$fastqc_basename=~s/\.[^\.\-\_]+$//;$fastqc_basename.='_fastqc'; # probably
   push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file") )
     unless -s $fastqc_basename . ".zip" || !$fastqc_exec;
   $files_to_delete_master{$fastqc_basename.".html"} = 1;
 }
-
 foreach my $thread (@threads) { $thread->join() if $thread->is_joinable(); }
 
 ##########################
@@ -335,20 +315,21 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
 }
 
 print "Completed. Compressing/cleaning up...\n";
-foreach my $thread (@threads) {
- $thread->join() if $thread->is_joinable();
-}
+foreach my $thread (@threads) { sleep (10) while $thread->is_running();}
+foreach my $thread (@threads) { $thread->join() if $thread->is_joinable();}
 
 &process_cmd(   "$pbzip_exec -fvp$cpus "
               . join( " ", ( keys %files_to_delete_master ) )
               . " 2>/dev/null" )
   if %files_to_delete_master && scalar( keys %files_to_delete_master ) > 0;
 
+
 ##################################################################################################
 
 
 sub check_fastq_format() {
  my $file = shift;
+ my $max_length;
  die "No file or does not exist\n" unless $file && -s $file;
  return 'sanger'  if $is_sanger;
  return 'casava' if $is_casava;
@@ -366,6 +347,7 @@ sub check_fastq_format() {
         my $qual   = <FQ>;
   die "File is not a fastq file:\n$id\n" unless ( $id =~ /^@/ );
   chomp($qual);
+  $max_length = length($qual) if !$max_length || $max_length < length($qual);
   @line = split( //, $qual );    # divide in chars
   for ( my $i = 0 ; $i < length($qual) ; $i++ ) {    # for each char
    $number = ord( $line[$i] );    # get the number represented by the ascii char
@@ -375,6 +357,16 @@ sub check_fastq_format() {
   }
  }
  close FQ;
+
+ # use $max_length to determine if last base should be cut.
+ if (!$max_keep_3){
+	$max_keep_3 = $max_length;
+	while ($max_length % 10 != 0 ){
+		$max_length--;
+        }
+	$max_keep_3 = $max_length;
+ }
+
 
  if ( $min_number >= 75 ) {    # if solexa/illumina
     print "This file is solexa/illumina format ($min_number,$max_number)\n";
@@ -523,6 +515,7 @@ sub get_path(){
 }
 
 sub remove_dodgy_reads(){
+    print "Removing duplicate PCR fragments...\n";
     my $FastbQualbToFastq_exec = &get_path('FastbQualbToFastq');
     my $FastqToFastbQualb_exec = &get_path('FastqToFastbQualb');
     my $RemoveDodgyReads_exec = &get_path('RemoveDodgyReads');
