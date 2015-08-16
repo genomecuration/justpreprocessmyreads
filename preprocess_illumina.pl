@@ -29,35 +29,33 @@
 
  Needs pbzip2
     
-    debug           => Verbose output. Prints out commands before they are run
-    threads:i       => Number of CPUs to use. NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files 
+    -debug           => Verbose output. Prints out commands before they are run
+    -threads:i       => Number of CPUs to use. NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files 
 
  Options
-    paired          => If 2 files have been provided, then treat them as a pair.
-    cdna            => Input is cDNA
-    gdna            => Input is gDNA
-    stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
-    backup          => If bz2 files provided, then re-compress them using parallel-bzip2 (e.g. if source is Baylor)
+    -paired          => If 2 files have been provided, then treat them as a pair.
+    -stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
+    -backup          => If bz2 files provided, then re-compress them using parallel-bzip2
 
  Screening:
-    adapters        => Illumina adapters FASTA (default provided)
-    noadaptor       => Do not search for adaptors
-    deduplicate :s  => Read name prefix and perform deduplication (will require RAM e.g. 4-12gb ). This will overwrite the readname prefix
+    -adapters        => Illumina adapters FASTA (default provided)
+    -noadaptor       => Do not search for adaptors
+    -deduplicate :s  => Read name prefix and perform deduplication (will require RAM e.g. 4-12gb ). This will overwrite the readname prefix
 
  These happen after any adaptor trimming (in this order)
-    trim_5      :i  => Trim these many bases from the 5' (def 0)
-    trim_3      :i  => Trim these many bases from the 3' (def 0)
-    max_keep    :i  => Trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def 0 ie not used)
-    qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
-    min_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
+    -trim_5      :i  => Trim these many bases from the 5' (def 0)
+    -trim_3      :i  => Trim these many bases from the 3' (def 0)
+    -max_keep    :i  => Trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def 0 ie not used)
+    -qtrim       :i  => Trim 3' so that mean quality is that much in the phred scale (def. 5)
+    -min_length  :i  => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
     
 
  Quality is auto-calculated based on the minimum number found but
-    sanger          => Force sanger Quality scores for fastq (otherwise autodetect)
-    illumina        => Force Illumina 1.3-1.7 qual scores (autodetect)
-    casava18        => Force input as Fastq from Casava 1.8 (autodetect)
-    noconvert_fastq => Don't convert to Sanger FASTQ flavour if Illumina 1.3 format is detected
-    dofasta         => Create FASTA file
+    -sanger          => Force sanger Quality scores for fastq (otherwise autodetect)
+    -illumina        => Force Illumina 1.3-1.7 qual scores (autodetect)
+    -casava18        => Force input as Fastq from Casava 1.8 (autodetect)
+    -noconvert_fastq => Don't convert to Sanger FASTQ flavour if Illumina 1.3 format is detected
+    -dofasta         => Create FASTA file
 
 Alexie tip: For RNA-Seq, I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
 
