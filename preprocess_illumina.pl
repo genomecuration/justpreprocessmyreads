@@ -380,7 +380,7 @@ sub check_fastq_format() {
            return 'casava';
    }
   }
-  print "This file is sanger format ($min_number,$max_number)\n";    # print result to terminal and die
+  print "This file is sanger format ($min_number,$max_number) with max length $max_length\n";    # print result to terminal and die
   return 'sanger';
  }
  die "Cannot determine fastq format ($min_number,$max_number) with max length $max_length\n";
