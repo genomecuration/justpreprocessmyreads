@@ -224,8 +224,10 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
              'sed --in-place \'s/^@\([^ ]*\) \([0-9]\).*/@\1\/\2/\' ' . $file );
   }
   $files_to_delete_master{$file} = 1;
+  my $fastqc_basename = $file;$fastqc_basename=~s/\.\S+$//;$fastqc_basename.='_fastqc'; # probably
   push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file") )
-    unless -s $file . "_fastqc.zip" || !$fastqc_exec;
+    unless -s $fastqc_basename . ".zip" || !$fastqc_exec;
+  $files_to_delete_master{$fastqc_basename.".html"} = 1;
  }
 }
 
@@ -314,10 +316,10 @@ print "Stage 1 completed\n";
 
 foreach my $file (@files){
 
- push(
-       @threads,
-       &create_fork("$fastqc_exec --noextract --nogroup -q $file")
- ) unless -f $file."_fastqc.zip" || !$fastqc_exec;
+  my $fastqc_basename = $file;$fastqc_basename=~s/\.\S+$//;$fastqc_basename.='_fastqc'; # probably
+  push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file") )
+    unless -s $fastqc_basename . ".zip" || !$fastqc_exec;
+  $files_to_delete_master{$fastqc_basename.".html"} = 1;
 }
 
 foreach my $thread (@threads) { $thread->join() if $thread->is_joinable(); }
