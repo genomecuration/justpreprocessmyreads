@@ -246,7 +246,7 @@ if ( $is_paired && $trimmomatic_exec ) {
  my $check1 = &check_fastq_format($file1);
  my $check2 = &check_fastq_format($file2);
 # bug of trimmomatic: threads 1 or more?
- my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.unpaired $file2.trimmomatic $file2.unpaired MINLEN:32 ";
+ my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.trim.unpaired $file2.trimmomatic $file2.trim.unpaired MINLEN:32 ";
  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
  $cmd .= " CROP:$trim_3 " if $trim_3;
@@ -259,9 +259,9 @@ if ( $is_paired && $trimmomatic_exec ) {
  &process_cmd($cmd) unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
  die "Something bad happened... one of the files are empty/missing...\n" unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
  $files_to_delete_master{$file1}                 = 1;
- $files_to_delete_master{ $file1 . '.unpaired' } = 1;
+ $files_to_delete_master{ $file1 . '.trim.unpaired' } = 1;
  $files_to_delete_master{$file2}                 = 1;
- $files_to_delete_master{ $file2 . '.unpaired' } = 1;
+ $files_to_delete_master{ $file2 . '.trim.unpaired' } = 1;
 
  $files[0] .= '.trimmomatic';
  $files[1] .= '.trimmomatic';
@@ -292,7 +292,6 @@ if ( $is_paired && $trimmomatic_exec ) {
   &process_cmd($cmd) unless -s "$file.trimmomatic";
   die "Something bad happened... one of the files are empty/missing...\n" unless -s "$file.trimmomatic";
   $files_to_delete_master{$file} = 1;
-  $files_to_delete_master{ $file . '.unpaired' } = 1;
   $files[$i] .= '.trimmomatic';
  }
  if ($max_keep_3 && $max_keep_3 >0){
