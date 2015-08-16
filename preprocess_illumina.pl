@@ -265,15 +265,6 @@ if ( $is_paired && $trimmomatic_exec ) {
 
  $files[0] .= '.trimmomatic';
  $files[1] .= '.trimmomatic';
- push(
-       @threads,
-       &create_fork(
-                    "$fastqc_exec --noextract --nogroup -q $file1.trimmomatic ")
- ) unless -f "$file1.trimmomatic_fastqc.zip" || !$fastqc_exec;
- push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file2.trimmomatic ")
- ) unless -f "$file2.trimmomatic_fastqc.zip" || !$fastqc_exec;
- 
- foreach my $thread (@threads) { $thread->join(); }
  if ($max_keep_3 && $max_keep_3 >0){
   print "Trimming 3' end to $max_keep_3 b.p.\n";
   for ( my $i = 0 ; $i < @files ; $i++ ) {
@@ -282,8 +273,7 @@ if ( $is_paired && $trimmomatic_exec ) {
   }
  }
 
-}
-else {
+}else {
  for ( my $i = 0 ; $i < @files ; $i++ ) {
   my $file = $files[$i];
   print "Pre-processing $file\n";
@@ -304,11 +294,6 @@ else {
   $files_to_delete_master{$file} = 1;
   $files_to_delete_master{ $file . '.unpaired' } = 1;
   $files[$i] .= '.trimmomatic';
-  push(
-        @threads,
-        &create_fork(
-                     "$fastqc_exec --noextract --nogroup -q $file.trimmomatic ")
-  ) unless -f "$file.trimmomatic_fastqc.zip" || !$fastqc_exec;
  }
  if ($max_keep_3 && $max_keep_3 >0){
   print "Trimming 3' end to $max_keep_3 b.p.\n";
@@ -325,7 +310,19 @@ foreach my $thread (@threads) {
 print "Stage 1 completed\n";
 ##########################
 
- &remove_dodgy_reads($files[0],$files[1]) if $is_paired && $do_deduplicate;
+&remove_dodgy_reads($files[0],$files[1]) if $is_paired && $do_deduplicate;
+
+##########################
+
+foreach my $file (@files){
+
+ push(
+       @threads,
+       &create_fork("$fastqc_exec --noextract --nogroup -q $file")
+ ) unless -f $file."_fastqc.zip" || !$fastqc_exec;
+}
+
+foreach my $thread (@threads) { $thread->join() if $thread->is_joinable(); }
 
 ##########################
 
@@ -533,17 +530,19 @@ sub remove_dodgy_reads(){
     my $PairsFake_exec   = &get_path('PairsFake');
     # sadly using allpaths for deduplication... one day write it's code to use fastq.
     my ($file1,$file2)=@_;
-    
+    die unless $file1 && $file2 && -s $file1 && -s $file2;    
     my $cmd = "$FastqToFastbQualb_exec WRITE_QUALB=True ";
 
     &process_cmd($cmd." FASTQ=$file1 OUT_HEAD=$file1");
     &process_cmd($cmd." FASTQ=$file2 OUT_HEAD=$file2");
     &process_cmd($MergePairedFastbs_exec. " HEAD1_IN=$file1 HEAD2_IN=$file2 HEAD_OUT=tmp WRITE_PAIRS=True");
+    die unless -s "tmp.pairs";
     unlink("$file1.fastb","$file1.qualb");
     unlink("$file2.fastb","$file2.qualb");
     
     &process_cmd($RemoveDodgyReads_exec." REMOVE_POLY_A=False NUM_THREADS=$cpus IN_HEAD=tmp OUT_HEAD=clean");
     unlink("tmp.fastb","tmp.qualb","tmp.pairs");
+    die unless -s "clean.readtrack";
     
     
     &process_cmd("$FastbQualbToFastq_exec HEAD_IN=clean HEAD_OUT=clean PAIRED=True PHRED_OFFSET=33 PICARD_NAMING_SCHEME=True NAMING_PREFIX=$do_deduplicate");
