@@ -361,15 +361,14 @@ sub check_fastq_format() {
  # use $max_length to determine if last base should be cut.
  if (!$max_keep_3){
 	$max_keep_3 = $max_length;
-	while ($max_length % 10 != 0 ){
-		$max_length--;
+	while ($max_keep_3 % 10 != 0 ){
+		$max_keep_3--;
         }
-	$max_keep_3 = $max_length;
  }
 
 
  if ( $min_number >= 75 ) {    # if solexa/illumina
-    print "This file is solexa/illumina format ($min_number,$max_number)\n";
+    print "This file is solexa/illumina format ($min_number,$max_number) with max length $max_length\n";
     close FQ;
     return 'illumina';
   }
@@ -377,14 +376,14 @@ sub check_fastq_format() {
   if ($id =~ /(\S+)\s*(\S*)/){
           my $description = $2;
           if ( $description && $description =~ /(\d)\:[A-Z]\:/ ) {
-           print "This file is in Sanger quality but CASAVA 1.8 header format ($min_number,$max_number)\n";
+           print "This file is in Sanger quality but CASAVA 1.8 header format ($min_number,$max_number) with max length $max_length\n";
            return 'casava';
    }
   }
   print "This file is sanger format ($min_number,$max_number)\n";    # print result to terminal and die
   return 'sanger';
  }
- die "Cannot determine fastq format ($min_number,$max_number)\n";
+ die "Cannot determine fastq format ($min_number,$max_number) with max length $max_length\n";
 }
 
 
