@@ -4,6 +4,8 @@
 
 use strict;
 use warnings;
+use FindBin qw/$RealBin/;
+$ENV{PATH} .= ":$RealBin";
 
 # change this to find all the files from left pairs
 my @files = glob("*_1_sequence.fastq");
