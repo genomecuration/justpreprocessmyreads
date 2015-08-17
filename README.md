@@ -3,12 +3,19 @@ complaints to alexie@butterflybase.org
 
 Identifies rRNA, contaminants, trims in a standard fashion etc. Maintains read pairs. Built for fire-and-forget high throughput projects (terabytes of data).
 
-Uses pbzip2, bowtie2, samtools, fastqc, Trimmomatic (optional)
+
+= INSTALL
+
+Run make
+
+$ make
+
+Uses pbzip2
 
 On Ubuntu you can install most of these software:
-$ sudo apt-get install pbzip2 bowtie2 samtools 
+$ sudo apt-get install pbzip2
 
-See 3rd_party directory for the others.
+= USAGE
 
 $ preprocess_illumina.pl <infile> <infile2> etc 
 
