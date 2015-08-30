@@ -549,9 +549,13 @@ sub remove_dodgy_reads_native(){
     }
     die "Search hash it too short ($size_search)\n" if $size_search < 8;
     print "Hashing files using K=$size_search\n";
+    my $total_seqs=int(0);
     open (FILE1,$file1);
     open (FILE2,$file2);
+    $|=1;
     while (my $sid1=<FILE1>){
+        $total_seqs++;
+        print "Processed $total_seqs      \r" if ($total_seqs =~/00000$/);
         my $seq1 = <FILE1>;
         my $qid1 = <FILE1>;
         my $qlt1 = <FILE1>;
@@ -594,10 +598,10 @@ sub remove_dodgy_reads_native(){
     }
     close FILE1;
     close FILE2;
-    
-    print "Deduplicating files...\n";
+    $|=0;
+    print "\nDeduplicating files...\n";
     my $counter=int(0);
-    my $total_seqs=int(0);
+    
     open (FILE1,$file1);
     open (FILE2,$file2);
     open (OUT1,">$file1.dedup");
@@ -611,7 +615,7 @@ sub remove_dodgy_reads_native(){
         my $seq2 = <FILE2>;
         my $qid2 = <FILE2>;
         my $qlt2 = <FILE2>;
-        $total_seqs++;
+        
         
         next if (length($seq1) < $size_search || length($seq2) < $size_search);
         my $md5_1 = md5(substr($seq1,$size_search));
