@@ -568,8 +568,9 @@ sub remove_dodgy_reads_native(){
         
         next if length($seq1) < $size_search || length($seq2) < $size_search;
         my $id; # common ID
-        if ($sid1=~/^(\S+)\/?[12]?/){
+        if ($sid1=~/^(\S+)/){
             $id = $1;
+            $id =~s/\/[12]$//;
         }
         
         my $md5_1 = md5(substr($seq1,$size_search));
@@ -622,8 +623,9 @@ sub remove_dodgy_reads_native(){
         
         next if (length($seq1) < $size_search || length($seq2) < $size_search);
         my $id;
-        if ($sid1=~/^(\S+)\/?[12]?/){
+        if ($sid1=~/^(\S+)/){
             $id = $1;
+            $id =~s/\/[12]$//;
         }
         
         my $md5_1 = md5(substr($seq1,$size_search));
