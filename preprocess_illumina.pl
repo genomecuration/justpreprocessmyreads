@@ -567,21 +567,24 @@ sub remove_dodgy_reads_native(){
         die "Warning. Number of lines for second file ($file2) is not the same as first file ($file1)\n" unless $qlt2;
         
         next if length($seq1) < $size_search || length($seq2) < $size_search;
+        my $id; # common ID
+        if ($sid1=~/^(\S+)\/?[12]?/){
+            $id = $1;
+        }
+        
         my $md5_1 = md5(substr($seq1,$size_search));
         my $md5_2 = md5(substr($seq2,$size_search));
-        if (($md5_2 cmp $md5_1) == 0){
-            warn "Possible hash collision or identical sequences: $md5_1 vs $md5_2\n $seq1 $seq2\n";
+        if (($md5_1 cmp $md5_2) == 0){
+            warn "WARNING: possibly identical sequences ($id). Skipping.\n $seq1 $seq2\n";
+            next;
         }
-        elsif (($md5_2 cmp $md5_1) != 1){
+        elsif (($md5_1 cmp $md5_2) == 1){
             my $t = $md5_1;
             $md5_1 = $md5_2;
             $md5_2 = $t;
         }
         my $total_q = &total_quality($qlt1,$qlt2);
-        my $id; # common ID
-        if ($sid1=~/^(\S+)\/?[12]?/){
-            $id = $1;
-        }
+
 
         # this could be more efficient if we used lists instead of hashes.
         
@@ -618,6 +621,11 @@ sub remove_dodgy_reads_native(){
         
         
         next if (length($seq1) < $size_search || length($seq2) < $size_search);
+        my $id;
+        if ($sid1=~/^(\S+)\/?[12]?/){
+            $id = $1;
+        }
+        
         my $md5_1 = md5(substr($seq1,$size_search));
         my $md5_2 = md5(substr($seq2,$size_search));
         if (($md5_2 cmp $md5_1) != 1){
@@ -626,10 +634,7 @@ sub remove_dodgy_reads_native(){
             $md5_2 = $t;
         }
         
-        my $id;
-        if ($sid1=~/^(\S+)\/?[12]?/){
-            $id = $1;
-        }
+
         
         next unless ($hash{$md5_1}{$md5_2} && $hash{$md5_1}{$md5_2}{'i'} eq $id) || ($hash{$md5_2}{$md5_1} && $hash{$md5_2}{$md5_1}{'i'} eq $id) ;
         print OUT1 $sid1.$seq1.$qid1.$qlt1;
