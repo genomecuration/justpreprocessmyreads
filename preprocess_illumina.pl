@@ -565,6 +565,14 @@ sub remove_dodgy_reads_native(){
         next if length($seq1) < $size_search || length($seq2) < $size_search;
         my $md5_1 = md5(substr($seq1,$size_search));
         my $md5_2 = md5(substr($seq2,$size_search));
+        if ($md5_2 cmp $md5_1 == 0){
+            warn "Possible hash collision or identical sequences: $md5_1 vs $md5_2\n $seq1 $seq2\n";
+        }
+        elsif ($md5_2 cmp $md5_1 != 1){
+            my $t = $md5_2;
+            $md5_1 = $md5_2;
+            $t = $md5_1;
+        }
         my $total_q = &total_quality($qlt1,$qlt2);
         my $id; # common ID
         if ($sid1=~/^(\S+)\/?[12]?/){
@@ -574,24 +582,15 @@ sub remove_dodgy_reads_native(){
         # this could be more efficient if we used lists instead of hashes.
         
         # this could go into an in-memory/file sqlite
-        if($hash{$md5_2}{$md5_1}){
-             # shift to md5_1 md5_2
-             if ($total_q > $hash{$md5_2}{$md5_1}{'q'}){
-                $hash{$md5_1}{$md5_2}{'i'} = $id;
-                $hash{$md5_1}{$md5_2}{'q'} = $total_q;
-             }else{
-                $hash{$md5_1}{$md5_2} = $hash{$md5_2}{$md5_1};
-             }
-             delete($hash{$md5_2}{$md5_1});
-         }
-        if ($hash{$md5_1}{$md5_2} && $hash{$md5_1}{$md5_2}{'i'} ne $id){
+        if ($hash{$md5_1}{$md5_2}){
             if ($total_q > $hash{$md5_1}{$md5_2}{'q'}){
                 $hash{$md5_1}{$md5_2}{'i'} = $id;
                 $hash{$md5_1}{$md5_2}{'q'} = $total_q;
             }
-         }
-      $hash{$md5_1}{$md5_2}{'i'} = $id;
-      $hash{$md5_1}{$md5_2}{'q'} = $total_q;
+        }else{
+          $hash{$md5_1}{$md5_2}{'i'} = $id;
+          $hash{$md5_1}{$md5_2}{'q'} = $total_q;
+        }
     }
     close FILE1;
     close FILE2;
@@ -613,9 +612,16 @@ sub remove_dodgy_reads_native(){
         my $qid2 = <FILE2>;
         my $qlt2 = <FILE2>;
         $total_seqs++;
+        
         next if (length($seq1) < $size_search || length($seq2) < $size_search);
         my $md5_1 = md5(substr($seq1,$size_search));
         my $md5_2 = md5(substr($seq2,$size_search));
+        if ($md5_2 cmp $md5_1 != 1){
+            my $t = $md5_2;
+            $md5_1 = $md5_2;
+            $t = $md5_1;
+        }
+        
         my $id;
         if ($sid1=~/^(\S+)\/?[12]?/){
             $id = $1;
