@@ -40,7 +40,7 @@
  Screening:
     -adapters        => Illumina adapters FASTA (default provided)
     -noadaptor       => Do not search for adaptors
-    -deduplicate :s  => Read name prefix and perform deduplication (will require RAM e.g. 4-12gb ). This will overwrite the readname prefix
+    -deduplicate :s  => Perform deduplication. There are two approaches. Native and Allpaths. For Native provide an integer to use as the length of the 5' seed (give '1' to use default of 16 for short reads and 32 for long reads). To use Allpaths provide a read name prefix this will overwrite the original readname. Allpaths used 16 bp as the 5' seed. Both approaches need lots of memory.
 
  These happen after any adaptor trimming (in this order)
     -trim_5      :i  => Trim these many bases from the 5'. Happens before quality trimming but after adaptor trimming (def 0)
@@ -92,7 +92,6 @@ my $qtrim      = 5;
 my $min_length = 32;
 my $slide_window  = 8 ; 
 my $slide_quality  = 8 ; 
-my $devel = 0;
 
 # edit these if you use it often with the same variables
 my $trimmomatic_exec = $RealBin . "/3rd_party/Trimmomatic-0.33/trimmomatic-0.33.jar";
@@ -516,7 +515,7 @@ sub get_path(){
 }
 
 sub remove_dodgy_reads(){
-  if ($devel){
+  if ($do_deduplicate=~/^\d+$/){
   remove_dodgy_reads_native(@_);
   }else{
       &remove_dodgy_reads_allpaths(@_);
@@ -545,6 +544,10 @@ sub remove_dodgy_reads_native(){
     my %hash;
     die "Sequences are too short for reliable deduplication\n" if $max_length < 16;
     my $size_search = $max_length < 60 ? 16 : 32;
+    if ($do_deduplicate=~/^\d+$/ && $do_deduplicate == 1){
+        $size_search = $do_deduplicate;
+    }
+    die "Search hash it too short ($size_search)\n" if $size_search < 8;
     print "Hashing files using K=$size_search\n";
     open (FILE1,$file1);
     open (FILE2,$file2);
