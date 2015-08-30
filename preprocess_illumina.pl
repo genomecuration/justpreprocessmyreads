@@ -514,12 +514,23 @@ sub get_path(){
 }
 
 sub remove_dodgy_reads(){
+  &remove_dodgy_reads_allpaths(@_);
+}
+
+
+
+sub remove_dodgy_reads_native(){
+    my ($file1,$file2)=@_;
+
+}
+
+
+sub remove_dodgy_reads_allpaths(){
     print "Removing duplicate PCR fragments...\n";
     my $FastbQualbToFastq_exec = &get_path('FastbQualbToFastq');
     my $FastqToFastbQualb_exec = &get_path('FastqToFastbQualb');
     my $RemoveDodgyReads_exec = &get_path('RemoveDodgyReads');
     my $MergePairedFastbs_exec  = &get_path('MergePairedFastbs');
-    my $PairsFake_exec   = &get_path('PairsFake');
     # sadly using allpaths for deduplication... one day write it's code to use fastq.
     my ($file1,$file2)=@_;
     die unless $file1 && $file2 && -s $file1 && -s $file2;    
