@@ -74,7 +74,7 @@ use Digest::MD5 qw/md5/;
 use FindBin qw/$RealBin/;
 $ENV{PATH} .= ":$RealBin:$RealBin/3rd_party/FastQC/:$RealBin/3rd_party/allpaths/";
 
-my ( $pbzip_exec, $fastqc_exec ) = &check_program( 'pbzip2', 'fastqc' );
+my ( $pbzip_exec, $fastqc_exec,$java_exec ) = &check_program( 'pbzip2', 'fastqc','java' );
 
 my (
      $is_sanger,   $do_fasta,     $genome_size,  $use_meryl,
