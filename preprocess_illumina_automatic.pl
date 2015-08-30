@@ -18,7 +18,7 @@ foreach my $f (sort @files){
 #	$pair=~s/R1_001.fastq/R2_001.fastq/;
 	next if !-s $pair || $pair eq $f;
 	# change the cmd to something you like
-	my $cmd = "preprocess_illumina.pl -paired $f $pair";
+	my $cmd = "preprocess_illumina.pl -paired '$f' '$pair'";
 	system($cmd);
 	sleep(1);
 }
