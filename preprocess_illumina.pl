@@ -565,13 +565,13 @@ sub remove_dodgy_reads_native(){
         next if length($seq1) < $size_search || length($seq2) < $size_search;
         my $md5_1 = md5(substr($seq1,$size_search));
         my $md5_2 = md5(substr($seq2,$size_search));
-        if ($md5_2 cmp $md5_1 == 0){
+        if (($md5_2 cmp $md5_1) == 0){
             warn "Possible hash collision or identical sequences: $md5_1 vs $md5_2\n $seq1 $seq2\n";
         }
-        elsif ($md5_2 cmp $md5_1 != 1){
-            my $t = $md5_2;
+        elsif (($md5_2 cmp $md5_1) != 1){
+            my $t = $md5_1;
             $md5_1 = $md5_2;
-            $t = $md5_1;
+            $md5_2 = $t;
         }
         my $total_q = &total_quality($qlt1,$qlt2);
         my $id; # common ID
@@ -616,10 +616,10 @@ sub remove_dodgy_reads_native(){
         next if (length($seq1) < $size_search || length($seq2) < $size_search);
         my $md5_1 = md5(substr($seq1,$size_search));
         my $md5_2 = md5(substr($seq2,$size_search));
-        if ($md5_2 cmp $md5_1 != 1){
-            my $t = $md5_2;
+        if (($md5_2 cmp $md5_1) != 1){
+            my $t = $md5_1;
             $md5_1 = $md5_2;
-            $t = $md5_1;
+            $md5_2 = $t;
         }
         
         my $id;
