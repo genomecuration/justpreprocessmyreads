@@ -70,6 +70,7 @@ use Data::Dumper;
 use threads;
 use Getopt::Long;
 use Pod::Usage;
+use Digest::MD5 qw/md5/;
 use FindBin qw/$RealBin/;
 $ENV{PATH} .= ":$RealBin:$RealBin/3rd_party/FastQC/:$RealBin/3rd_party/allpaths/";
 
@@ -81,7 +82,7 @@ my (
      $is_casava,      @user_labels,  @user_bowties, $noconvert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman,
-     $noadaptors, $max_keep_3, $mate_pair,$do_deduplicate
+     $noadaptors, $max_keep_3, $mate_pair,$do_deduplicate, $max_length
 );
 my $cwd = `pwd`;
 chomp($cwd);
@@ -91,6 +92,7 @@ my $qtrim      = 5;
 my $min_length = 32;
 my $slide_window  = 8 ; 
 my $slide_quality  = 8 ; 
+my $devel = 0;
 
 # edit these if you use it often with the same variables
 my $trimmomatic_exec = $RealBin . "/3rd_party/Trimmomatic-0.33/trimmomatic-0.33.jar";
@@ -329,7 +331,7 @@ foreach my $thread (@threads) { $thread->join() if $thread->is_joinable();}
 
 sub check_fastq_format() {
  my $file = shift;
- my $max_length;
+ 
  die "No file or does not exist\n" unless $file && -s $file;
  return 'sanger'  if $is_sanger;
  return 'casava' if $is_casava;
@@ -348,7 +350,7 @@ sub check_fastq_format() {
   die "File is not a fastq file:\n$id\n" unless ( $id =~ /^@/ );
   chomp($qual);
   $max_length = length($qual) if !$max_length || $max_length < length($qual);
-  @line = split( //, $qual );    # divide in chars
+  @line = split( '', $qual );    # divide in chars
   for ( my $i = 0 ; $i < length($qual) ; $i++ ) {    # for each char
    $number = ord( $line[$i] );    # get the number represented by the ascii char
    $min_number = $number if (!$min_number || $number < $min_number);
@@ -514,14 +516,119 @@ sub get_path(){
 }
 
 sub remove_dodgy_reads(){
-  &remove_dodgy_reads_allpaths(@_);
+  if ($devel){
+  remove_dodgy_reads_native(@_);
+  }else{
+      &remove_dodgy_reads_allpaths(@_);
+  }
 }
 
 
+sub total_quality(){
+  # get total quality
+  my $total_q = int(0);
+  foreach my $string (@_){
+    chomp($string);
+    my @array = split('',$string);
+    for (my $i=0;$i<scalar(@array);$i++){
+       $total_q += ord($array[$i]);
+    }
+  }
+  return $total_q;
+}
 
 sub remove_dodgy_reads_native(){
+    print "Removing duplicate PCR fragments...\n";
+    # using the allpaths technique
+    # assume paired; $max_length has the length
     my ($file1,$file2)=@_;
+    my %hash;
+    die "Sequences are too short for reliable deduplication\n" if $max_length < 16;
+    my $size_search = $max_length < 60 ? 16 : 32;
+    print "Hashing files using K=$size_search\n";
+    open (FILE1,$file1);
+    open (FILE2,$file2);
+    while (my $sid1=<FILE1>){
+        my $seq1 = <FILE1>;
+        my $qid1 = <FILE1>;
+        my $qlt1 = <FILE1>;
+        
+        my $sid2 = <FILE2>;
+        my $seq2 = <FILE2>;
+        my $qid2 = <FILE2>;
+        my $qlt2 = <FILE2>;
+        die "Warning. Number of lines for second file ($file2) is not the same as first file ($file1)\n" unless $qlt2;
+        
+        next if length($seq1) < $size_search || length($seq2) < $size_search;
+        my $md5_1 = md5(substr($seq1,$size_search));
+        my $md5_2 = md5(substr($seq2,$size_search));
+        my $total_q = &total_quality($qlt1,$qlt2);
+        my $id; # common ID
+        if ($sid1=~/^(\S+)\/?[12]?/){
+            $id = $1;
+        }
 
+        
+        # this could go into an in-memory/file sqlite
+        if($hash{$md5_2}{$md5_1}){
+             # shift to md5_1 md5_2
+             if ($total_q > $hash{$md5_2}{$md5_1}{'q'}){
+                $hash{$md5_1}{$md5_2}{'i'} = $id;
+                $hash{$md5_1}{$md5_2}{'q'} = $total_q;
+             }else{
+                $hash{$md5_1}{$md5_2} = $hash{$md5_2}{$md5_1};
+             }
+             delete($hash{$md5_2}{$md5_1});
+         }
+        if ($hash{$md5_1}{$md5_2} && $hash{$md5_1}{$md5_2}{'i'} ne $id){
+            if ($total_q > $hash{$md5_1}{$md5_2}{'q'}){
+                $hash{$md5_1}{$md5_2}{'i'} = $id;
+                $hash{$md5_1}{$md5_2}{'q'} = $total_q;
+            }
+         }
+      $hash{$md5_1}{$md5_2}{'i'} = $id;
+      $hash{$md5_1}{$md5_2}{'q'} = $total_q;
+    }
+    close FILE1;
+    close FILE2;
+    
+    print "Deduplicating files...\n";
+    my $counter=int(0);
+    my $total_seqs=int(0);
+    open (FILE1,$file1);
+    open (FILE2,$file2);
+    open (OUT1,">$file1.dedup");
+    open (OUT2,">$file2.dedup");
+    while (my $sid1=<FILE1>){
+        my $seq1 = <FILE1>;
+        my $qid1 = <FILE1>;
+        my $qlt1 = <FILE1>;
+        
+        my $sid2 = <FILE2>;
+        my $seq2 = <FILE2>;
+        my $qid2 = <FILE2>;
+        my $qlt2 = <FILE2>;
+        $total_seqs++;
+        next if (length($seq1) < $size_search || length($seq2) < $size_search);
+        my $md5_1 = md5(substr($seq1,$size_search));
+        my $md5_2 = md5(substr($seq2,$size_search));
+        my $id;
+        if ($sid1=~/^(\S+)\/?[12]?/){
+            $id = $1;
+        }
+        
+        next unless ($hash{$md5_1}{$md5_2} && $hash{$md5_1}{$md5_2}{'i'} eq $id) || ($hash{$md5_2}{$md5_1} && $hash{$md5_2}{$md5_1}{'i'} eq $id) ;
+        print OUT1 $sid1.$seq1.$qid1.$qlt1;
+        print OUT2 $sid2.$seq2.$qid2.$qlt2;
+        $counter++;
+    }
+    close FILE1;
+    close FILE2;
+    close OUT1;
+    close OUT2;
+    print "Deduplication done. Kept $counter sequences from a total of $total_seqs sequences\n";
+    rename("$file1.dedup",$file1);
+    rename("$file2.dedup",$file2);
 }
 
 
