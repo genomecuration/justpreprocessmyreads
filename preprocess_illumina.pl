@@ -564,7 +564,7 @@ sub remove_dodgy_reads_native(){
         my $seq2 = <FILE2>;
         my $qid2 = <FILE2>;
         my $qlt2 = <FILE2>;
-        die "Warning. Number of lines for second file ($file2) is not the same as first file ($file1)\n" unless $qlt2;
+        die "FATAL: Number of lines for second file ($file2) is not the same as first file ($file1)\n" unless $qlt2;
         
         next if length($seq1) < $size_search || length($seq2) < $size_search;
         my $id; # common ID
@@ -630,7 +630,7 @@ sub remove_dodgy_reads_native(){
         
         my $md5_1 = md5(substr($seq1,$size_search));
         my $md5_2 = md5(substr($seq2,$size_search));
-        if (($md5_2 cmp $md5_1) != 1){
+        if (($md5_2 cmp $md5_1) == 1){
             my $t = $md5_1;
             $md5_1 = $md5_2;
             $md5_2 = $t;
