@@ -544,7 +544,7 @@ sub remove_dodgy_reads_native(){
     my %hash;
     die "Sequences are too short for reliable deduplication\n" if $max_length < 16;
     my $size_search = $max_length < 60 ? 16 : 32;
-    if ($do_deduplicate=~/^\d+$/ && $do_deduplicate == 1){
+    if ($do_deduplicate=~/^\d+$/ && $do_deduplicate != 1){
         $size_search = $do_deduplicate;
     }
     die "Search hash it too short ($size_search)\n" if $size_search < 8;
@@ -571,6 +571,7 @@ sub remove_dodgy_reads_native(){
             $id = $1;
         }
 
+        # this could be more efficient if we used lists instead of hashes.
         
         # this could go into an in-memory/file sqlite
         if($hash{$md5_2}{$md5_1}){
