@@ -550,6 +550,7 @@ sub remove_dodgy_reads_native(){
     die "Search hash it too short ($size_search)\n" if $size_search < 8;
     print "Hashing files using K=$size_search\n";
     my $total_seqs=int(0);
+    my $ignored_seqs = int(0);
     open (FILE1,$file1);
     open (FILE2,$file2);
     $|=1;
@@ -576,7 +577,8 @@ sub remove_dodgy_reads_native(){
         my $md5_1 = md5(substr($seq1,$size_search));
         my $md5_2 = md5(substr($seq2,$size_search));
         if (($md5_1 cmp $md5_2) == 0){
-            warn "WARNING: possibly identical sequences ($id). Skipping.\n $seq1 $seq2\n";
+            $ignored_seqs++;
+#            warn "WARNING: possibly identical sequences ($id). Skipping.\n $seq1 $seq2\n";
             next;
         }
         elsif (($md5_1 cmp $md5_2) == 1){
@@ -603,7 +605,7 @@ sub remove_dodgy_reads_native(){
     close FILE1;
     close FILE2;
     $|=0;
-    print "\nDeduplicating files...\n";
+    print "\nFound $ignored_seqs pairs with identical seed for forward and reverse sequences.\nDeduplicating files...\n";
     my $counter=int(0);
     
     open (FILE1,$file1);
@@ -635,9 +637,7 @@ sub remove_dodgy_reads_native(){
             $md5_1 = $md5_2;
             $md5_2 = $t;
         }
-        
-
-        
+          
         next unless ($hash{$md5_1}{$md5_2} && $hash{$md5_1}{$md5_2}{'i'} eq $id) || ($hash{$md5_2}{$md5_1} && $hash{$md5_2}{$md5_1}{'i'} eq $id) ;
         print OUT1 $sid1.$seq1.$qid1.$qlt1;
         print OUT2 $sid2.$seq2.$qid2.$qlt2;
