@@ -29,7 +29,7 @@
 
  Needs pbzip2
     
-    -debug           => Verbose output. Prints out commands before they are run
+    -debug           => Verbose output. Prints out commands before they are run. Tracks memory for native deduplication
     -threads     :i  => Number of CPUs to use. NB: The program also uses 2-4 threads for parallel stats creation & compressing/backup of files 
 
  Options
@@ -56,7 +56,7 @@
     -noconvert_fastq => Don't convert to Sanger FASTQ flavour if Illumina 1.3 format is detected
     -dofasta         => Create FASTA file
 
-Alexie tip: For RNA-Seq, I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
+Alexie tip: For RNA-Seq,            I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
 
 =head1 DEPENDECIES
 
@@ -71,6 +71,7 @@ use threads;
 use Getopt::Long;
 use Pod::Usage;
 use Digest::MD5 qw/md5/;
+use BSD::Resource;
 use FindBin qw/$RealBin/;
 $ENV{PATH} .= ":$RealBin:$RealBin/3rd_party/FastQC/:$RealBin/3rd_party/allpaths/";
 
@@ -81,7 +82,7 @@ my (
      $is_illumina, $delete_fastb, $is_cdna,      $no_preprocess,
      $is_casava,      @user_labels,  @user_bowties, $noconvert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
-     $backup_bz2,  $debug,        $is_gdna,      $nohuman,
+     $backup_bz2,  $debug,        $is_gdna,      $nohuman, 
      $noadaptors, $max_keep_3, $mate_pair,$do_deduplicate, $max_length
 );
 my $cwd = `pwd`;
@@ -553,10 +554,13 @@ sub remove_dodgy_reads_native(){
     my $ignored_seqs = int(0);
     open (FILE1,$file1);
     open (FILE2,$file2);
-    $|=1;
     while (my $sid1=<FILE1>){
         $total_seqs++;
-        print "Processed $total_seqs      \r" if ($total_seqs =~/00000$/);
+        if ($total_seqs =~/00000$/){
+            print "Processed $total_seqs   " 
+            &get_memory_usage() if $debug;
+            print "\r";
+        }
         my $seq1 = <FILE1>;
         my $qid1 = <FILE1>;
         my $qlt1 = <FILE1>;
@@ -604,7 +608,6 @@ sub remove_dodgy_reads_native(){
     }
     close FILE1;
     close FILE2;
-    $|=0;
     print "\nFound $ignored_seqs pairs with identical seed for forward and reverse sequences.\nDeduplicating files...\n";
     my $counter=int(0);
     
@@ -682,3 +685,9 @@ sub remove_dodgy_reads_allpaths(){
     rename("clean.A.fastq",$file1);
     rename("clean.B.fastq",$file2);
 }
+
+sub get_memory_usage(){
+    my $rusage = getrusage();
+    print "\tMemory usage: ".@{$rusage}[2]."\n";
+}
+
