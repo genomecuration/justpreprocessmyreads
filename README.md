@@ -15,6 +15,11 @@ Uses pbzip2
 On Ubuntu you can install most of these software:
 $ sudo apt-get install pbzip2
 
+Uses some perl libraries so:
+
+$ sudo cpan Data::Dumper threads Getopt::Long Pod::Usage Digest::MD5 BSD::Resource FindBin
+
+
 # USAGE
 
 $ preprocess_illumina.pl <infile> <infile2> etc 

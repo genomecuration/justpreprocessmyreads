@@ -161,6 +161,8 @@ for ( my $i = 0 ; $i < scalar(@user_bowties) ; $i++ ) {
 }
 pod2usage "No files given\n" unless @files;
 
+print "Running in DEBUG mode\n" if $debug;
+
 undef($adapters_db) if $noadaptors;
 
 #setrlimit( RLIMIT_VMEM, $kmer_ram * 1000 * 1000 , $kmer_ram * 1024 * 1024 )  if $kmer_ram;
@@ -554,10 +556,11 @@ sub remove_dodgy_reads_native(){
     my $ignored_seqs = int(0);
     open (FILE1,$file1);
     open (FILE2,$file2);
+    $|=1;
     while (my $sid1=<FILE1>){
         $total_seqs++;
         if ($total_seqs =~/00000$/){
-            print "Processed $total_seqs   " 
+            print "Processed $total_seqs   ";
             &get_memory_usage() if $debug;
             print "\r";
         }
@@ -608,6 +611,7 @@ sub remove_dodgy_reads_native(){
     }
     close FILE1;
     close FILE2;
+    $|=0;
     print "\nFound $ignored_seqs pairs with identical seed for forward and reverse sequences.\nDeduplicating files...\n";
     my $counter=int(0);
     
@@ -688,6 +692,6 @@ sub remove_dodgy_reads_allpaths(){
 
 sub get_memory_usage(){
     my $rusage = getrusage();
-    print "\tMemory usage: ".@{$rusage}[2]."\n";
+    print "\tMemory usage: ".$rusage->maxrss."k\n";
 }
 
