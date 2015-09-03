@@ -6,10 +6,6 @@ Identifies rRNA, contaminants, trims in a standard fashion etc. Maintains read p
 
 # INSTALL
 
-Run make
-
-$ make
-
 Uses pbzip2
 
 On Ubuntu you can install most of these software:
@@ -19,6 +15,13 @@ Uses some perl libraries so:
 
 $ sudo cpan Data::Dumper threads Getopt::Long Pod::Usage Digest::MD5 BSD::Resource FindBin
 
+For Blue we will need mono:
+
+$ sudo apt-get install mono-runtime mono-mcs
+
+Finally to compile 3rd party software, run make
+
+$ make
 
 # USAGE
 
@@ -53,3 +56,5 @@ fastqc
 allpathslg
  http://www.broadinstitute.org/software/allpaths-lg/blog/
 
+blue
+ http://www.bioinformatics.csiro.au/blue/
