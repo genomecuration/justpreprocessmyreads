@@ -83,7 +83,7 @@ my (
      $is_casava,      @user_labels,  @user_bowties, $noconvert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman, 
-     $noadaptors, $max_keep_3, $mate_pair,$do_deduplicate, $max_length
+     $noadaptors, $max_keep_3, $no_qc, $mate_pair,$do_deduplicate, $max_length
 );
 my $cwd = `pwd`;
 chomp($cwd);
@@ -110,6 +110,7 @@ GetOptions(
             'nohuman'            => \$nohuman,
             'adapters:s'         => \$adapters_db,
             'noscreen|no_screen' => \$no_screen,
+            'noqc|no_qc' => \$no_qc,
             'sanger'             => \$is_sanger,
             'dofasta'            => \$do_fasta,
             'genome_size:s'      => \$genome_size,
@@ -226,9 +227,10 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
   }
   $files_to_delete_master{$file} = 1;
   my $fastqc_basename = $file;$fastqc_basename=~s/\.[^\.\-\_]+$//;$fastqc_basename.='_fastqc'; # probably
-  push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file") )
-    unless -s $fastqc_basename . ".zip" || !$fastqc_exec;
-  $files_to_delete_master{$fastqc_basename.".html"} = 1;
+  unless (-s $fastqc_basename . ".zip" || !$fastqc_exec || $no_qc){
+  push( @threads, &create_fork("$fastqc_exec --noextract --nogroup -q $file") );
+   $files_to_delete_master{$fastqc_basename.".html"} = 1;
+  }
  }
 }
 
@@ -243,13 +245,13 @@ if ($stop_qc) {
 ###############################
 # TRIMMING
 ###############################
-if ( $is_paired && $trimmomatic_exec ) {
+if (!$no_preprocess){
+if ( $is_paired && $trimmomatic_exec) {
  my $file1 = $files[0];
  my $file2 = $files[1];
  print "Pre-processing $file1 and $file2\n";
  my $check1 = &check_fastq_format($file1);
  my $check2 = &check_fastq_format($file2);
-# bug of trimmomatic: threads 1 or more?
  my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.trim.unpaired $file2.trimmomatic $file2.trim.unpaired MINLEN:32 ";
  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
@@ -291,7 +293,7 @@ if ( $is_paired && $trimmomatic_exec ) {
   $files[$i] .= '.trimmomatic';
  }
 }
-
+}
 foreach my $thread (@threads) { $thread->join() if $thread->is_joinable();}
 
 print "Stage 1 completed\n";
@@ -365,9 +367,11 @@ sub check_fastq_format() {
  # use $max_length to determine if last base should be cut.
  if (!$max_keep_3){
 	$max_keep_3 = $max_length;
-	while ($max_keep_3 % 10 != 0 ){
-		$max_keep_3--;
-        }
+        if ($max_keep_3 > 100){
+		while ($max_keep_3 % 10 != 0 ){
+			$max_keep_3--;
+        	}
+	}
  }
 
 
