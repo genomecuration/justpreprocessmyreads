@@ -226,7 +226,7 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
    undef($file_is_illumina);
    print "Converting from CASAVA 1.8 to Sanger header format\n";
    &process_cmd(
-             'sed --in-place \'s/^@\([^ ]*\) \([0-9]\).*/@\1\/\2/\' ' . $file );
+             'sed --in-place \'s/^@\([^ ]*\) \([0-9]\).*/@\1\/\2/\' ' . $file ) unless $noconvert_fastq;
   }
   $files_to_delete_master{$file} = 1;
   my $fastqc_basename = $file;$fastqc_basename=~s/\.[^\.\-\_]+$//;$fastqc_basename.='_fastqc'; # probably
