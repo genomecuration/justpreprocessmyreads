@@ -14,9 +14,9 @@
 			SRA 		"*_1_fastq*"	DEFAULT
 			seqcenter1 	"*_1_sequence.fastq*"
 			seqcenter2	"*R1_*.fastq*"
-	-parallel :i	=> How many files to process in parallel. Warning, each file will use 4 CPUs. Defaults to 1
-
- Any other options you want to pass, just add them to the end of this command
+	-parallel   :i	=> How many files to process in parallel. Warning, each file will use 4 CPUs. Defaults to 1
+  
+  Any other options you want to pass to preprocess_illumina.pl, end them also at the end (e.g. -noadapt)
 
 =cut
 
@@ -28,7 +28,7 @@ use Time::localtime;
 use threads;
 use Thread_helper;
 use Pod::Usage;
-use Getopt::Long;
+use Getopt::Long qw/:config pass_through/;
 
 $ENV{PATH} .= ":$RealBin";
 
@@ -39,12 +39,12 @@ my ($naming,$do_help);
 &GetOptions(
 	'name|naming:s' => \$naming,
 	'parallel|do_parallel:i' => \$parallel,
-	'help'	=> \$do_help
+	'help'	=> \$do_help,
 );
+my $extras = join(' ',@ARGV);
 
 die pod2usage if $do_help;
 
-my $extras = join(' ',@ARGV);
 
 $is_sra = 1 if $naming && $naming=~/sra/i;
 $is_seqcenter1 = 1 if $naming && $naming=~/seqcenter1/i;
@@ -56,12 +56,21 @@ my @files;
 @files = glob("*_1_sequence.fastq*") if $is_seqcenter1;
 @files = glob("*R1_*.fastq*") if $is_seqcenter2;
 
+my %check;
+foreach my $f (@files){
+	$check{$f}++ unless $f=~/trimmomatic/;
+}
+foreach my $f (@files){
+	delete ($check{$f.".bz2"}) if $check{$f.".bz2"};
+}
+
+@files = sort (keys  %check);
+
 print "\nWill process these files:\n\t".join("\n\t",@files)."\n\n";
 
 sleep(5);
 
 my $thread_helper = new Thread_helper($parallel);
-
 my @failed_cmds;
 foreach my $f (sort @files){
 	my $cmd = "$RealBin/preprocess_illumina.pl ";
@@ -76,14 +85,9 @@ foreach my $f (sort @files){
 		$cmd .= " -paired $extras '$f' '$pair'";
 	}
 	# can change the cmd to something you like
-        my $thread        = threads->create('process_cmd',($cmd));
+        my $thread        = threads->create('process_cmd',$cmd);
         $thread_helper->add_thread($thread);
         sleep(10);
-
-	print "CMD: $cmd\n";
-	sleep(3);
-	system($cmd);
-	sleep(1);
 }
 
 $thread_helper->wait_for_all_threads_to_complete();
