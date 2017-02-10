@@ -38,12 +38,12 @@
     -backup          => If bz2 files provided, then re-compress them using parallel-bzip2
 
  Screening:
-    -adaptors        => Illumina adaptors FASTA (default provided)
-    -noadaptor       => Do not search for adaptors
+    -adapters        => Illumina adapters FASTA (default provided)
+    -noadapter       => Do not search for adapters
     -deduplicate :s  => Perform deduplication. There are two approaches. Native and Allpaths. For Native provide an integer to use as the length of the 5' seed (give '1' to use default of 16 for short reads and 32 for long reads). To use Allpaths provide a read name prefix this will overwrite the original readname. Allpaths used 16 bp as the 5' seed. Both approaches need lots of memory.
 
- These happen after any adaptor trimming (in this order)
-    -trim_5      :i     => Trim these many bases from the 5'. Happens before quality trimming but after adaptor trimming (def 0)
+ These happen after any adapter trimming (in this order)
+    -trim_5      :i     => Trim these many bases from the 5'. Happens before quality trimming but after adapter trimming (def 0)
     -max_keep    :i     => After any -trim5 then trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def automatic to closest whole 10 b.p decrement - 100, 150, 170 etc - if not user specified)
     -min_length  :i     => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
     -qtrim       :i     => Trim 3' so that mean quality is that much in the phred scale (def. 5)
@@ -84,7 +84,7 @@ my (
      $is_casava,      @user_labels,  @user_bowties, $convert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman, 
-     $noadaptors, $max_keep_3, $no_qc, $mate_pair,$do_deduplicate, $max_length,
+     $noadapters, $max_keep_3, $no_qc, $mate_pair,$do_deduplicate, $max_length,
      $no_av_quality
 );
 my $cwd = `pwd`;
@@ -102,7 +102,7 @@ my $rDNA_db          = $RealBin . '/dbs/' . 'rDNA_nt_inv.fsa_nr';      #bowtie2
 my $contam_db = $RealBin . '/dbs/' . 'ecoli_pseudomonas.fsa.masked.nr'; #bowtie2
 my $human_db  = $RealBin . '/dbs/' . 'human_genome.fasta';              #bowtie2
 my $phix_db   = $RealBin . '/dbs/' . 'phage_phiX174';                   #bowtie2
-my $adaptors_db = $RealBin . '/dbs/' . 'illumina_PE_2008_adaptors.fsa'; #fasta
+my $adapters_db = $RealBin . '/dbs/' . 'illumina_PE_2008_adapters.fsa'; #fasta
 
 GetOptions(
             'debug'              => \$debug,
@@ -110,7 +110,7 @@ GetOptions(
             'contam:s'           => \$contam_db,
             'human:s'            => \$human_db,
             'nohuman'            => \$nohuman,
-            'adapters|adaptors:s' => \$adaptors_db,
+            'adaptors|adapters:s' => \$adapters_db,
             'noscreen|no_screen' => \$no_screen,
             'noqc|no_qc' => \$no_qc,
             'sanger'             => \$is_sanger,
@@ -135,7 +135,7 @@ GetOptions(
             'qtrim:i'            => \$qtrim,
             'backup'             => \$backup_bz2,
             'trimmomatic:s'      => \$trimmomatic_exec,
-            'noadaptors'         => \$noadaptors,
+            'noadapters'         => \$noadapters,
             'min_length:i'       => \$min_length,
 	    'slide_quality:i'    => \$slide_quality,
 	    'slide_window:i'    => \$slide_window,
@@ -167,7 +167,7 @@ pod2usage "No files given\n" unless @files;
 
 print "Running in DEBUG mode\n" if $debug;
 
-undef($adaptors_db) if $noadaptors;
+undef($adapters_db) if $noadapters;
 
 #setrlimit( RLIMIT_VMEM, $kmer_ram * 1000 * 1000 , $kmer_ram * 1024 * 1024 )  if $kmer_ram;
 
@@ -184,7 +184,7 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
  my $out = $file;
  $out =~ s/.bz2$//;
  $out =~ s/.gz$//;
- $out .= '.trimmomatic' if ( $is_paired && $trimmomatic_exec && $adaptors_db );
+ $out .= '.trimmomatic' if ( $is_paired && $trimmomatic_exec && $adapters_db );
  $out .= '.trim.filtered.fastq';
  print "\n#############################\nProcessing filename $file\n";
 
@@ -256,7 +256,7 @@ if ( $is_paired && $trimmomatic_exec) {
  my $check1 = &check_fastq_format($file1);
  my $check2 = &check_fastq_format($file2);
  my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.trim.unpaired $file2.trimmomatic $file2.trim.unpaired MINLEN:32 ";
- $cmd .= " ILLUMINACLIP:$adaptors_db:2:40:15 " if $adaptors_db ;
+ $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
  $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >0;
  $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality " unless $no_av_quality;
@@ -280,7 +280,7 @@ if ( $is_paired && $trimmomatic_exec) {
   print "Pre-processing $file\n";
   my $check = &check_fastq_format($file);
   my $cmd = "java -jar $trimmomatic_exec SE -threads $cpus -phred33 $file $file.trimmomatic MINLEN:32 ";
-  $cmd .= " ILLUMINACLIP:$adaptors_db:2:40:15 " if  $adaptors_db;
+  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if  $adapters_db;
   $cmd .= " HEADCROP:$trim_5 " if $trim_5;
   $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >0;
   $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality " unless $no_av_quality;
