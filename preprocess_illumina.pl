@@ -56,6 +56,8 @@
     -convert_fastq   => Convert to Sanger FASTQ flavour if Illumina 1.3 format is detected
     -dofasta         => Create FASTA file
 
+    -no_delete_raw   => Don't delete FASTQ files after compressing
+
 Alexie tip: For RNA-Seq,            I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
 
 =head1 DEPENDECIES
