@@ -83,7 +83,7 @@ my (
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman, 
      $noadapters, $max_keep_3, $no_qc, $mate_pair,$do_deduplicate, $max_length,
-     $no_av_quality
+     $no_av_quality, $no_delete_raw
 );
 my $cwd = `pwd`;
 chomp($cwd);
@@ -138,7 +138,8 @@ GetOptions(
 	    'slide_window:i'    => \$slide_window,
             'no_average_quality' => \$no_av_quality,
 	    'mate_pair'=> \$mate_pair,
-	    'deduplicate:s' => \$do_deduplicate
+	    'deduplicate:s' => \$do_deduplicate,
+	   'no_delete_raw' => \$no_delete_raw,
 ) || pod2usage();
 my @files = @ARGV;
 
@@ -313,11 +314,14 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
 
 print "Completed. Compressing/cleaning up...\n";
 
-&process_cmd(   "$pbzip_exec -fvp$cpus "
+&process_cmd(   "$pbzip_exec -kfvp$cpus "
               . join( " ", ( keys %files_to_delete_master ) )
               . " 2>/dev/null" )
   if %files_to_delete_master && scalar( keys %files_to_delete_master ) > 0;
 
+foreach my $f ( keys %files_to_delete_master ){
+	unlink ($f) if -s $f && !$no_delete_raw;
+}
 
 ##################################################################################################
 
