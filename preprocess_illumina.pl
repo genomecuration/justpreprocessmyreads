@@ -360,7 +360,7 @@ sub check_fastq_format() {
  close FQ;
 
  $noadapters++ if $max_length > 300; #not illumina
- $no_av_quality if $max_length > 3000; # pacbio
+ $no_av_quality++ if $max_length > 3000; # pacbio
 
  # use $max_length to determine if last base should be cut.
  if (!$max_keep_3){
