@@ -165,8 +165,6 @@ for ( my $i = 0 ; $i < scalar(@user_bowties) ; $i++ ) {
 }
 pod2usage "No files given\n" unless @files;
 
-undef($adapters_db) if $noadapters;
-
 #setrlimit( RLIMIT_VMEM, $kmer_ram * 1000 * 1000 , $kmer_ram * 1024 * 1024 )  if $kmer_ram;
 
 my ( %files_to_delete_master );
@@ -238,6 +236,8 @@ if ($stop_qc) {
  print "User asked to stop after QC\n";
  exit(0);
 }
+
+undef($adapters_db) if $noadapters;
 
 ###############################
 # TRIMMING
@@ -358,6 +358,9 @@ sub check_fastq_format() {
   }
  }
  close FQ;
+
+ $noadapters++ if $max_length > 300; #not illumina
+ $no_av_quality if $max_length > 3000; # pacbio
 
  # use $max_length to determine if last base should be cut.
  if (!$max_keep_3){
