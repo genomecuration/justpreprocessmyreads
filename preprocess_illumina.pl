@@ -84,8 +84,8 @@ my (
      $is_casava,      @user_labels,  @user_bowties, $convert_fastq,
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman, 
-     $noadapters, $max_keep_3, $no_qc, $mate_pair,$do_deduplicate, $max_length,
-     $no_av_quality, $no_delete_raw
+     $noadapters, $max_keep_3, $do_qc, $mate_pair,$do_deduplicate, $max_length,
+     $no_av_quality, $no_delete_raw, $no_qc
 );
 my $cwd = `pwd`;
 chomp($cwd);
@@ -105,6 +105,7 @@ my $phix_db   = $RealBin . '/dbs/' . 'phage_phiX174';                   #bowtie2
 my $adapters_db = $RealBin . '/dbs/' . 'illumina_PE_2008_adapters.fsa'; #fasta
 
 GetOptions(
+		'noqc' =>\$no_qc, # to ignoreDEBUG
             'debug'              => \$debug,
             'rDNA:s'             => \$rDNA_db,
             'contam:s'           => \$contam_db,
@@ -112,7 +113,7 @@ GetOptions(
             'nohuman'            => \$nohuman,
             'adaptors|adapters:s' => \$adapters_db,
             'noscreen|no_screen' => \$no_screen,
-            'noqc|no_qc' => \$no_qc,
+            'doqc|do_qc' => \$do_qc,
             'sanger'             => \$is_sanger,
             'dofasta'            => \$do_fasta,
             'genome_size:s'      => \$genome_size,
@@ -226,8 +227,8 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
   }
   $files_to_delete_master{$file} = 1;
   my $fastqc_basename = $file;$fastqc_basename=~s/\.[^\.\-\_]+$//;$fastqc_basename.='_fastqc'; # probably
-  unless (-s $fastqc_basename . ".zip" || !$fastqc_exec || $no_qc){
-    system("$fastqc_exec --noextract --nogroup -q $file");
+  unless (-s $fastqc_basename . ".zip" || !$fastqc_exec ){
+    system("$fastqc_exec --noextract --nogroup -q $file") if $do_qc;
   }
  }
 }
@@ -361,6 +362,8 @@ sub check_fastq_format() {
 
  $noadapters++ if $max_length > 300; #not illumina
  $no_av_quality++ if $max_length > 3000; # pacbio
+
+ die "These reads are too long for this software" if $max_length > 10000; 
 
  # use $max_length to determine if last base should be cut.
  if (!$max_keep_3){
