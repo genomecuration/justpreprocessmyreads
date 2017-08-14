@@ -363,7 +363,7 @@ sub check_fastq_format() {
  $noadapters++ if $max_length > 300; #not illumina
  $no_av_quality++ if $max_length > 3000; # pacbio
 
- die "These reads are too long for this software" if $max_length > 10000; 
+ die "These reads are too long for this software ($max_length)\n" if $max_length > 10000; 
 
  # use $max_length to determine if last base should be cut.
  if (!$max_keep_3){
