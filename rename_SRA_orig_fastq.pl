@@ -10,7 +10,7 @@ foreach my $dir (@dirs){
 	foreach my $file (@files){
 		if ($file=~/\/pass\/(\d)\//){
 			my $id = $1 || die;
-			my $new_name = "./$dir" . "_$id"."_fastq";
+			my $new_name = "./$dir" . "_$id".".fastq";
 			warn "SKIP: File $new_name already exists\n" if -s $new_name;
 			rename($file, $new_name ) if !-s $new_name;
 		}
