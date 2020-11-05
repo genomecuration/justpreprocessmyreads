@@ -42,7 +42,7 @@ my ($naming,$do_help);
 	'help'	=> \$do_help,
 );
 my $extras = join(' ',@ARGV);
-
+print "Will use extras: $extras\n";
 die pod2usage if $do_help;
 
 
@@ -74,6 +74,7 @@ my $thread_helper = new Thread_helper($parallel);
 my @failed_cmds;
 foreach my $f (sort @files){
 	my $cmd = "$RealBin/preprocess_illumina.pl ";
+	$cmd.= " -no_qc -no_original ";
 	my $pair = $f;
 	# change this to grab the pair's filename by substituting something 
 	$pair=~s/_1.fastq/_2.fastq/ if $is_sra; #SRA
