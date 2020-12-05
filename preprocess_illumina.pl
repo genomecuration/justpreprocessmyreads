@@ -47,7 +47,7 @@
 
  These happen after any adapter trimming (in this order)
     -trim_5      :i     => Trim these many bases from the 5'. Happens before quality trimming but after adapter trimming (def 0)
-    -max_keep    :i     => After any -trim5 then trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def automatic to closest whole 10 b.p decrement - 100, 150, 170 etc - if not user specified)
+    -max_keep    :i     => Number >= 100. After any -trim5 then trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def automatic to closest whole 10 b.p decrement - 100, 150, 170 etc - if not user specified).
     -min_length  :i     => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
     -qtrim       :i     => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     -no_average_quality => Do not do any average quality trimming, just -trim_5, -max_keep and -min_length
@@ -262,7 +262,7 @@ if ( $is_paired && $trimmomatic_exec) {
  my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.trimmomatic.unpaired $file2.trimmomatic $file2.trimmomatic.unpaired MINLEN:32 ";
  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
- $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >0;
+ $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >99;
  $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality " unless $no_av_quality;
  if ( $check1 eq $check2 && ( $check1 eq 'illumina' ) ) {
   $cmd =~ s/phred33/phred64/;
@@ -280,6 +280,7 @@ if ( $is_paired && $trimmomatic_exec) {
 
  $files[0] .= '.trimmomatic';
  $files[1] .= '.trimmomatic';
+ 
 }else {
  for ( my $i = 0 ; $i < @files ; $i++ ) {
   my $file = $files[$i];
@@ -288,7 +289,7 @@ if ( $is_paired && $trimmomatic_exec) {
   my $cmd = "java -jar $trimmomatic_exec SE -threads $cpus -phred33 $file $file.trimmomatic MINLEN:32 ";
   $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if  $adapters_db;
   $cmd .= " HEADCROP:$trim_5 " if $trim_5;
-  $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >0;
+  $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >99;
   $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality " unless $no_av_quality;
 
   if ( $check && $check eq 'illumina' ) {
@@ -334,7 +335,7 @@ print "Completed. Compressing/cleaning up...\n";
 
 foreach my $file (keys %files_to_delete_master ){
 	if ($files_to_delete_master{$file} == 2){
-		unlink($file) if -s $file;
+#		unlink($file) if -s $file;
 		delete($files_to_delete_master{$file});
 	}else{
 	    &process_cmd("$pbzip_exec -kfvp$cpus $file 2>/dev/null");
