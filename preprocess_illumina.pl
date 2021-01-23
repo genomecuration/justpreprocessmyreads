@@ -333,6 +333,10 @@ sub check_fastq_format() {
  my $file = shift;
  
  die "No file or does not exist\n" unless $file && -s $file;
+
+ my $tail = `tail -1 $file`;
+ die "File $file seems corrupt: $tail" unless $tail && $tail=~/\s$/;
+
  return 'sanger'  if $is_sanger;
  return 'casava' if $is_casava;
  return 'illumina' if $is_illumina;

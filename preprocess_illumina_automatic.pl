@@ -11,7 +11,7 @@
 =head1 USAGE
 
 	-naming	    :s	=> Tell me (case-insensitive) if you data come from sra seqcenter1 or seqcenter2. Determines format of files:
-			SRA 		"*_1_fastq*"	DEFAULT
+			SRA 		"*_1.fastq*"	DEFAULT
 			seqcenter1 	"*_1_sequence.fastq*"
 			seqcenter2	"*R1_*.fastq*"
 	-parallel   :i	=> How many files to process in parallel. Warning, each file will use 4 CPUs. Defaults to 1
@@ -52,7 +52,7 @@ $is_seqcenter2 = 1 if $naming && ($naming=~/seqcenter2/i || $naming=~/rama/i  ) 
 
 # change this to find all the files from left pairs
 my @files;
-@files = glob("*_1_fastq*") if $is_sra; #SRA
+@files = glob("*_1.fastq*") if $is_sra; #SRA
 @files = glob("*_1_sequence.fastq*") if $is_seqcenter1;
 @files = glob("*R1_*.fastq*") if $is_seqcenter2;
 
@@ -76,7 +76,7 @@ foreach my $f (sort @files){
 	my $cmd = "$RealBin/preprocess_illumina.pl ";
 	my $pair = $f;
 	# change this to grab the pair's filename by substituting something 
-	$pair=~s/_1_fastq/_2_fastq/ if $is_sra; #SRA
+	$pair=~s/_1.fastq/_2.fastq/ if $is_sra; #SRA
 	$pair=~s/_1_sequence/_2_sequence/ if $is_seqcenter1;
 	$pair=~s/R1_/R2_/ if $is_seqcenter2;
 	if (!-s $pair || $pair eq $f){
