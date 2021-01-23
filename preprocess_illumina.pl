@@ -36,6 +36,10 @@
     -stop_qc         => Stop after QC of untrimmed file (e.g. in order to specify -trim_5 or -qtrim)
     -backup          => If bz2 files provided, then re-compress them using parallel-bzip2
 
+ Wpeed:
+  -no_original	     => Discard original, untrimmed files
+  -no_qc	     => Do not run FastQc
+
  Screening:
     -adapters        => Illumina adapters FASTA (default provided)
     -noadapter       => Do not search for adapters
@@ -43,7 +47,7 @@
 
  These happen after any adapter trimming (in this order)
     -trim_5      :i     => Trim these many bases from the 5'. Happens before quality trimming but after adapter trimming (def 0)
-    -max_keep    :i     => After any -trim5 then trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def automatic to closest whole 10 b.p decrement - 100, 150, 170 etc - if not user specified)
+    -max_keep    :i     => Number >= 100. After any -trim5 then trim 3' end so that it is no longer than these many bases. Have seen erroneous 251th base in 250 bp sequencing (def automatic to closest whole 10 b.p decrement - 100, 150, 170 etc - if not user specified).
     -min_length  :i     => Discard sequences shorter than this (after quality trimming). Defaults to 32. Increase to 50-80 if you plan to use if it for alignments
     -qtrim       :i     => Trim 3' so that mean quality is that much in the phred scale (def. 5)
     -no_average_quality => Do not do any average quality trimming, just -trim_5, -max_keep and -min_length
@@ -58,7 +62,8 @@
 
     -no_delete_raw   => Don't delete FASTQ files after compressing
 
-Alexie tip: For RNA-Seq,            I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
+Alexie tip: For RNA-Seq,
+            I check the FASTQC report of the processed data but do not trim the beginning low complexity regions (hexamer priming) as some tests with TrinityRNAseq did not show improvement (the opposite in fact).
 
 =head1 DEPENDECIES
 
@@ -85,7 +90,7 @@ my (
      $is_paired,   $trim_5,       $stop_qc,      $no_screen,
      $backup_bz2,  $debug,        $is_gdna,      $nohuman, 
      $noadapters, $max_keep_3, $do_qc, $mate_pair,$do_deduplicate, $max_length,
-     $no_av_quality, $no_delete_raw, $no_qc
+     $no_av_quality, $no_delete_raw, $no_qc, $no_orig
 );
 my $cwd = `pwd`;
 chomp($cwd);
@@ -97,7 +102,7 @@ my $slide_window  = 8 ;
 my $slide_quality  = 8 ; 
 
 # edit these if you use it often with the same variables
-my $trimmomatic_exec = $RealBin . "/3rd_party/Trimmomatic-0.36/trimmomatic-0.36.jar";
+my $trimmomatic_exec = $RealBin . "/3rd_party/Trimmomatic-0.39/trimmomatic-0.39.jar";
 my $rDNA_db          = $RealBin . '/dbs/' . 'rDNA_nt_inv.fsa_nr';      #bowtie2
 my $contam_db = $RealBin . '/dbs/' . 'ecoli_pseudomonas.fsa.masked.nr'; #bowtie2
 my $human_db  = $RealBin . '/dbs/' . 'human_genome.fasta';              #bowtie2
@@ -143,6 +148,8 @@ GetOptions(
 	    'mate_pair'=> \$mate_pair,
 	    'deduplicate:s' => \$do_deduplicate,
 	   'no_delete_raw' => \$no_delete_raw,
+		'no_original' => \$no_orig,
+		'no_qc'   => \$no_qc
 ) || pod2usage();
 my @files = @ARGV;
 
@@ -211,7 +218,8 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
    $file =~ s/.gz$//;
    &process_cmd("gunzip  $file.gz ");
   }
-  $files_to_delete_master{$file} = 1;
+  $files_to_delete_master{$file} = 1 unless $no_orig;
+  $files_to_delete_master{$file} = 2 if $no_orig;
 
   $files[$i] = $file;
    my $check = &check_fastq_format($file);
@@ -225,7 +233,8 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
    &process_cmd(
              'sed --in-place \'s/^@\([^ ]*\) \([0-9]\).*/@\1\/\2/\' ' . $file ) if $convert_fastq;
   }
-  $files_to_delete_master{$file} = 1;
+  $files_to_delete_master{$file} = 1 unless $no_orig;
+  $files_to_delete_master{$file} = 2 if $no_orig;
   my $fastqc_basename = $file;$fastqc_basename=~s/\.[^\.\-\_]+$//;$fastqc_basename.='_fastqc'; # probably
   unless (-s $fastqc_basename . ".zip" || !$fastqc_exec ){
     system("$fastqc_exec --noextract --nogroup -q $file") if $do_qc;
@@ -253,7 +262,7 @@ if ( $is_paired && $trimmomatic_exec) {
  my $cmd = "java -jar $trimmomatic_exec PE -threads $cpus -phred33 $file1 $file2 $file1.trimmomatic $file1.trimmomatic.unpaired $file2.trimmomatic $file2.trimmomatic.unpaired MINLEN:32 ";
  $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if $adapters_db ;
  $cmd .= " HEADCROP:$trim_5 " if $trim_5;
- $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >0;
+ $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >99;
  $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality " unless $no_av_quality;
  if ( $check1 eq $check2 && ( $check1 eq 'illumina' ) ) {
   $cmd =~ s/phred33/phred64/;
@@ -262,13 +271,16 @@ if ( $is_paired && $trimmomatic_exec) {
  $cmd .= " MINLEN:$min_length 2>&1";
  &process_cmd($cmd) unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
  die "Something bad happened... one of the files are empty/missing...\n" unless -s "$file1.trimmomatic" && -s "$file2.trimmomatic";
- $files_to_delete_master{$file1}                 = 1;
+ $files_to_delete_master{$file1}                 = 2 if $no_orig;
+ $files_to_delete_master{$file1}                 = 1 unless $no_orig;
  $files_to_delete_master{ $file1 . '.trimmomatic.unpaired' } = 1;
- $files_to_delete_master{$file2}                 = 1;
+ $files_to_delete_master{$file2}                 = 2 if $no_orig;
+ $files_to_delete_master{$file2}                 = 1 unless $no_orig;
  $files_to_delete_master{ $file2 . '.trimmomatic.unpaired' } = 1;
 
  $files[0] .= '.trimmomatic';
  $files[1] .= '.trimmomatic';
+ 
 }else {
  for ( my $i = 0 ; $i < @files ; $i++ ) {
   my $file = $files[$i];
@@ -277,7 +289,7 @@ if ( $is_paired && $trimmomatic_exec) {
   my $cmd = "java -jar $trimmomatic_exec SE -threads $cpus -phred33 $file $file.trimmomatic MINLEN:32 ";
   $cmd .= " ILLUMINACLIP:$adapters_db:2:40:15 " if  $adapters_db;
   $cmd .= " HEADCROP:$trim_5 " if $trim_5;
-  $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >0;
+  $cmd .= " CROP:$max_keep_3 " if $max_keep_3 && $max_keep_3 >99;
   $cmd .= " LEADING:4 TRAILING:$qtrim SLIDINGWINDOW:$slide_window:$slide_quality " unless $no_av_quality;
 
   if ( $check && $check eq 'illumina' ) {
@@ -287,7 +299,8 @@ if ( $is_paired && $trimmomatic_exec) {
   $cmd .= " MINLEN:$min_length 2>&1";
   &process_cmd($cmd) unless -s "$file.trimmomatic";
   die "Something bad happened... one of the files are empty/missing...\n" unless -s "$file.trimmomatic";
-  $files_to_delete_master{$file} = 1;
+  $files_to_delete_master{$file} = 2 if $no_orig;
+  $files_to_delete_master{$file} = 1 unless $no_orig;
   $files[$i] .= '.trimmomatic';
  }
 }
@@ -299,10 +312,12 @@ print "Stage 1 completed (".$files[0].")\n";
 &remove_dodgy_reads($files[0],$files[1]) if $is_paired && $do_deduplicate;
 
 ##########################
-foreach my $file (@files){
+unless ($no_qc){
+ foreach my $file (@files){
   my $fastqc_basename = $file;$fastqc_basename.='_fastqc'; # probably
   system("$fastqc_exec --noextract --nogroup -q $file") unless -s $fastqc_basename . ".zip" || !$fastqc_exec;
   $files_to_delete_master{$fastqc_basename.".html"} = 1;
+ }
 }
 
 ##########################
@@ -312,18 +327,20 @@ for ( my $i = 0 ; $i < @files ; $i++ ) {
  print "Post-processing $file\n";
  &fastq_to_fasta("$file")  if $do_fasta;
  &do_genome_kmers("$file") if $kmer_ram > 0;
- $files_to_delete_master{$file} = 1;
+  $files_to_delete_master{$file} = 2 if $no_orig;
+  $files_to_delete_master{$file} = 1 unless $no_orig;
 }
 
 print "Completed. Compressing/cleaning up...\n";
 
-&process_cmd(   "$pbzip_exec -kfvp$cpus "
-              . join( " ", ( keys %files_to_delete_master ) )
-              . " 2>/dev/null" )
-  if %files_to_delete_master && scalar( keys %files_to_delete_master ) > 0;
-
-foreach my $f ( keys %files_to_delete_master ){
-	unlink ($f) if -s $f && !$no_delete_raw;
+foreach my $file (keys %files_to_delete_master ){
+	if ($files_to_delete_master{$file} == 2){
+#		unlink($file) if -s $file;
+		delete($files_to_delete_master{$file});
+	}else{
+	    &process_cmd("$pbzip_exec -kfvp$cpus $file 2>/dev/null");
+	    unlink($file) if -s $file && !$no_delete_raw;
+	}
 }
 
 ##################################################################################################
@@ -331,9 +348,7 @@ foreach my $f ( keys %files_to_delete_master ){
 
 sub check_fastq_format() {
  my $file = shift;
- 
  die "No file or does not exist\n" unless $file && -s $file;
-
  my $tail = `tail -1 $file`;
  die "File $file seems corrupt: $tail" unless $tail && $tail=~/\s$/;
 
