@@ -36,7 +36,7 @@ foreach my $prename (keys %hash){
 				.$direction
 				.'.'
 				.$suffix ;
-			print $cmd;
+			print $cmd."\n";
 			sleep(1);
 			system ($cmd);
 		}else{
@@ -47,7 +47,7 @@ foreach my $prename (keys %hash){
 				.$direction
 				.'.'
 				.$suffix ;
-			print $cmd;
+			print $cmd."\n";
 			sleep(1);
 			system ($cmd);
 		}
