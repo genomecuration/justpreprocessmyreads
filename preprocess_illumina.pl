@@ -163,6 +163,7 @@ if ( !$is_paired && scalar(@files) == 2 ) {
 "You provided two files. If these are paired/mated files, then you should also specify -paired\n";
  sleep(3);
 }
+print "Will use $adapters_db\n" if $adapters_db;
 
 for ( my $i = 0 ; $i < scalar(@user_bowties) ; $i++ ) {
  my $user_bowtie = $user_bowties[$i];
