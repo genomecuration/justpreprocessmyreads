@@ -26,9 +26,9 @@ for (my $i=0;$i<scalar(@files);$i++){
 	}
 }
 
-foreach my $prename (keys %hash){
-	foreach my $direction (keys %{$hash{$prename}}){
-		my $move_str = join(" ",values(%{$hash{$prename}{$direction}}));
+foreach my $prename (sort keys %hash){
+	foreach my $direction (sort keys %{$hash{$prename}}){
+		my $move_str = join(" ",sort (values(%{$hash{$prename}{$direction}})));
 		if (scalar(keys %{$hash{$prename}{$direction}}) > 1){
 			my $cmd = "cat $move_str "
 				. " > $prename"
